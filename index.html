@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Чат</title>
+</head>
+<body>
+    <h2>AI Ассистент ИГУ</h2>
+    <input type="text" id="userInput" placeholder="Задай вопрос по базе...">
+    <button id="sendBtn">Отправить</button>
+    <div id="chatBox"></div>
+
+    <script>
+        document.getElementById('sendBtn').onclick = async () => {
+            const text = document.getElementById('userInput').value;
+            
+            // Отправляем POST-запрос на наш Python-сервер
+            const response = await fetch('http://127.0.0.1:8080/api/ask', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ text: text })
+            });
+            
+            // Получаем JSON-ответ и выводим его на экран
+            const data = await response.json();
+            document.getElementById('chatBox').innerHTML += `<p>${data.reply}</p>`;
+        };
+    </script>
+</body>
+</html>
