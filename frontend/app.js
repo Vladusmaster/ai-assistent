@@ -2,10 +2,16 @@ const chatHistory = document.getElementById('chatHistory');
 const userInput = document.getElementById('userInput');
 const loader = document.getElementById('loader');
 
+const tableStates = new Map();
+const PAGE_SIZE = 8;
+
 function handleKeyPress(event) {
-    if (event.key === 'Enter') {
-        sendMessage();
-    }
+    if (event.key === 'Enter') sendMessage();
+}
+
+function applyFilter(filterText) {
+    userInput.value = userInput.value ? `${userInput.value} (${filterText})` : filterText;
+    userInput.focus();
 }
 
 async function sendMessage() {
@@ -52,26 +58,41 @@ async function sendMessage() {
                 `;
             }
 
+            if (data.warning) {
+                let chipsHtml = '';
+                if (data.suggested_filters && data.suggested_filters.length > 0) {
+                    chipsHtml = `<div class="filter-chips">` +
+                        data.suggested_filters.map(f => `<span class="chip" onclick="applyFilter('${f}')">+ ${f}</span>`).join('') +
+                        `</div>`;
+                }
+                botReply += `
+                    <div class="warning-box">
+                        <b>⚠️ Внимание:</b> ${data.warning}
+                        ${chipsHtml}
+                    </div>
+                `;
+            }
+
             if (data.columns && data.data) {
                 if (data.data.length === 0) {
                     botReply += '<p style="margin-top: 10px;"><i>Данных по заданному условию не найдено.</i></p>';
                 } else {
-                    botReply += '<div class="table-wrap"><table><thead><tr>';
-                    data.columns.forEach(col => {
-                        botReply += `<th>${col}</th>`;
+                    const tableId = 'tbl_' + Math.random().toString(36).substring(2, 9);
+                    tableStates.set(tableId, {
+                        columns: data.columns,
+                        rows: data.data,
+                        currentPage: 1,
+                        totalPages: Math.ceil(data.data.length / PAGE_SIZE)
                     });
-                    botReply += '</tr></thead><tbody>';
-                    
-                    data.data.forEach(row => {
-                        botReply += '<tr>';
-                        data.columns.forEach(col => {
-                            const val = row[col];
-                            botReply += `<td>${val !== null && val !== undefined ? val : ''}</td>`;
-                        });
-                        botReply += '</tr>';
-                    });
-                    botReply += '</tbody></table></div>';
-                    botReply += `<small style="color: #718096; display: block; margin-top: 5px;">Показано записей: ${data.count}</small>`;
+
+                    botReply += `
+                        <div class="table-wrap" id="wrap_${tableId}">
+                            ${renderTableHtml(tableId, 1)}
+                        </div>
+                        <div class="pagination-controls" id="ctrl_${tableId}">
+                            ${renderPaginationControls(tableId, 1)}
+                        </div>
+                    `;
                 }
             }
         }
@@ -91,6 +112,49 @@ async function sendMessage() {
     } finally {
         loader.style.display = 'none';
     }
+}
+
+function renderTableHtml(tableId, page) {
+    const state = tableStates.get(tableId);
+    const start = (page - 1) * PAGE_SIZE;
+    const end = start + PAGE_SIZE;
+    const pageRows = state.rows.slice(start, end);
+
+    let html = `<table><thead><tr>`;
+    state.columns.forEach(col => { html += `<th>${col}</th>`; });
+    html += `</tr></thead><tbody>`;
+
+    pageRows.forEach(row => {
+        html += `<tr>`;
+        state.columns.forEach(col => {
+            const val = row[col];
+            html += `<td>${val !== null && val !== undefined ? val : ''}</td>`;
+        });
+        html += `</tr>`;
+    });
+    html += `</tbody></table>`;
+    return html;
+}
+
+function renderPaginationControls(tableId, page) {
+    const state = tableStates.get(tableId);
+    return `
+        <span>Строк: ${state.rows.length} | Стр. ${page} из ${state.totalPages}</span>
+        <div>
+            <button class="pagination-btn" onclick="changePage('${tableId}', -1)" ${page === 1 ? 'disabled' : ''}>← Назад</button>
+            <button class="pagination-btn" onclick="changePage('${tableId}', 1)" ${page === state.totalPages ? 'disabled' : ''}>Вперед →</button>
+        </div>
+    `;
+}
+
+function changePage(tableId, delta) {
+    const state = tableStates.get(tableId);
+    const newPage = state.currentPage + delta;
+    if (newPage < 1 || newPage > state.totalPages) return;
+
+    state.currentPage = newPage;
+    document.getElementById(`wrap_${tableId}`).innerHTML = renderTableHtml(tableId, newPage);
+    document.getElementById(`ctrl_${tableId}`).innerHTML = renderPaginationControls(tableId, newPage);
 }
 
 function addMessage(htmlContent, className) {

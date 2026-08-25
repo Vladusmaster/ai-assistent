@@ -15,7 +15,7 @@ if CURRENT_DIR not in sys.path:
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from database import init_db_pool, close_db_pool, execute_safe_query
+from database import init_db_pool, close_db_pool, execute_safe_query, pool
 from security import validate_and_sanitize_sql, SecurityError
 from llm import generate_sql_and_explanation
 
@@ -42,6 +42,32 @@ app.add_middleware(
 class QueryRequest(BaseModel):
     question: str
 
+async def analyze_query_volume(base_sql: str) -> tuple[int, str | None, list[str]]:
+    clean_sql = base_sql.split(" LIMIT ")[0].rstrip(";")
+    count_sql = f"SELECT COUNT(*) AS total FROM ({clean_sql}) AS subquery_count"
+    
+    warning = None
+    suggested_filters = []
+    
+    try:
+        async with pool.acquire() as conn:
+            total_records = await conn.fetchval(count_sql)
+            
+            if total_records > 50:
+                warning = f"Широкий запрос: найдено {total_records} записей. Применен автоматический LIMIT."
+                if "applications" in clean_sql:
+                    suggested_filters = ["Указать год (year = 2026)", "Выбрать статус (status = 'Зачислен')", "Фильтр по форме (education_basis = 'Бюджет')"]
+                elif "students" in clean_sql:
+                    suggested_filters = ["Фильтр по курсу (course_year = 1)", "Фильтр по группе (study_group = 'ПИ-231')", "Фильтр по статусу (status = 'Обучается')"]
+                elif "grades" in clean_sql:
+                    suggested_filters = ["Указать семестр (semester = 2)", "Только задолженности (is_debt = true)"]
+                else:
+                    suggested_filters = ["Уточните факультет или кафедру", "Добавьте временной интервал"]
+                    
+            return total_records, warning, suggested_filters
+    except Exception:
+        return 0, None, []
+
 @app.post("/api/ask")
 async def ask_question(req: QueryRequest):
     logging.info(f"Получен вопрос пользователя: {req.question}")
@@ -52,7 +78,9 @@ async def ask_question(req: QueryRequest):
         explanation = llm_response.get("explanation", {})
         summary_ru = llm_response.get("summary_ru", "")
         
-        safe_sql = validate_and_sanitize_sql(raw_sql)
+        safe_sql = validate_and_sanitize_sql(raw_sql, default_limit=100)
+        total_found, warning, suggested_filters = await analyze_query_volume(safe_sql)
+        
         columns, rows = await execute_safe_query(safe_sql)
         
         return {
@@ -62,7 +90,10 @@ async def ask_question(req: QueryRequest):
             "summary": summary_ru,
             "columns": columns,
             "data": rows,
-            "count": len(rows)
+            "count": len(rows),
+            "total_available": total_found,
+            "warning": warning,
+            "suggested_filters": suggested_filters
         }
         
     except SecurityError as se:
