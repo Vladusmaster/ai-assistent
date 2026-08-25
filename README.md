@@ -1,20 +1,29 @@
-# AI-ассистент для анализа данных университета (Код Байкала 2026)
+# AI-ассистент базы данных РЭУ им. Г. В. Плеханова
 
-Интеллектуальный коннектор для безопасного анализа данных PostgreSQL с использованием LLM (Text-to-SQL).
+Интеллектуальный ассистент для безопасного анализа данных PostgreSQL на естественном языке с поддержкой Explainable AI и адаптивным контролем объема выборки.
 
-## Стек технологий
-* **Backend:** Python 3.10+, FastAPI, Uvicorn
-* **Database Driver:** psycopg2-binary
-* **Frontend:** HTML5, CSS3, JavaScript (Fetch API)
-* **LLM Integration:** YANDEX GPT
-* **Containerization:** Docker, Docker Compose
+## Основной стек
+- **Backend:** Python 3.11, FastAPI, asyncpg, sqlparse, httpx, Pydantic
+- **LLM:** Yandex Foundation Models (YandexGPT)
+- **Database:** PostgreSQL
+- **Frontend:** HTML5, CSS3, Vanilla JS (встраиваемый виджет)
+- **DevOps:** Docker, Docker Compose
 
-## Архитектура безопасности
-* Поддержка только `SELECT`-запросов.
-* Whitelist разрешенных таблиц.
-* Автоматическое ограничение `LIMIT`.
-* Ограничение времени выполнения (`statement_timeout`).
-* Обезличивание и защита персональных данных студентов.
+---
+
+## Настройка переменных окружения
+
+Создайте файл `.env` в корневом каталоге проекта:
+
+```dotenv
+DB_HOST=185.241.193.203
+DB_PORT=5432
+DB_NAME=vesna-db5
+DB_USER=vdb5_user
+DB_PASSWORD=X59b39C9-5D4X4NHn
+
+YANDEX_API_KEY=ваш_секретный_api_key
+YANDEX_FOLDER_ID=ваш_folder_id
 
 ## Инструкция по запуску
 1. Клонировать репозиторий:
