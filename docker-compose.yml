@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  assistant-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai_university_assistant
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Проброс папок для быстрой правки кода без пересборки контейнера
+      - ./backend:/app/backend
+      - ./frontend:/app/frontend
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
