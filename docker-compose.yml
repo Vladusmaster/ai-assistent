@@ -1,28 +1,24 @@
 services:
-<<<<<<< HEAD
   assistant-app:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: ai_university_assistant
-=======
   ai-assistant:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: reu_ai_assistant
->>>>>>> e733783 (обновил бд)
+
     restart: unless-stopped
     ports:
       - "8000:8000"
     env_file:
-<<<<<<< HEAD
+      - .env
       - .env
     volumes:
       # Проброс папок для быстрой правки кода без пересборки контейнера
       - ./backend:/app/backend
       - ./frontend:/app/frontend
     command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
-=======
-      - .env
->>>>>>> e733783 (обновил бд)
+

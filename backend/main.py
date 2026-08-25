@@ -55,12 +55,23 @@ async def analyze_query_volume(base_sql: str) -> tuple[int, str | None, list[str
             
             if total_records > 50:
                 warning = f"Широкий запрос: найдено {total_records} записей. Применен автоматический LIMIT."
-                if "applications" in clean_sql:
-                    suggested_filters = ["Указать год (year = 2026)", "Выбрать статус (status = 'Зачислен')", "Фильтр по форме (education_basis = 'Бюджет')"]
-                elif "students" in clean_sql:
-                    suggested_filters = ["Фильтр по курсу (course_year = 1)", "Фильтр по группе (study_group = 'ПИ-231')", "Фильтр по статусу (status = 'Обучается')"]
-                elif "grades" in clean_sql:
-                    suggested_filters = ["Указать семестр (semester = 2)", "Только задолженности (is_debt = true)"]
+                if "заявления" in clean_sql or "applications" in clean_sql:
+                    suggested_filters = [
+                        'Указать год ("год_кампании" = 2026)',
+                        'Выбрать статус ("статус" = \'Зачислен\')',
+                        'Фильтр по форме ("основание_поступления" = \'Бюджетные места\')'
+                    ]
+                elif "студенты" in clean_sql or "students" in clean_sql:
+                    suggested_filters = [
+                        'Фильтр по курсу ("курс" = 1)',
+                        'Фильтр по группе ("учебная_группа" = \'ПИ-231\')',
+                        'Фильтр по статусу ("статус_студента" = \'Обучается\')'
+                    ]
+                elif "оценки" in clean_sql or "grades" in clean_sql:
+                    suggested_filters = [
+                        'Указать семестр ("семестр" = 2)',
+                        'Только задолженности ("академическая_задолженность" = true)'
+                    ]
                 else:
                     suggested_filters = ["Уточните факультет или кафедру", "Добавьте временной интервал"]
                     
@@ -74,9 +85,23 @@ async def ask_question(req: QueryRequest):
     
     try:
         llm_response = await generate_sql_and_explanation(req.question)
-        raw_sql = llm_response.get("sql", "")
+        raw_sql = llm_response.get("sql")
         explanation = llm_response.get("explanation", {})
         summary_ru = llm_response.get("summary_ru", "")
+        
+        if not raw_sql:
+            return {
+                "status": "success",
+                "sql": None,
+                "explanation": None,
+                "summary": summary_ru or "Запрос не относится к данным реестров университета. Задайте вопрос по кафедрам, преподавателям, студентам или абитуриентам.",
+                "columns": [],
+                "data": [],
+                "count": 0,
+                "total_available": 0,
+                "warning": None,
+                "suggested_filters": []
+            }
         
         safe_sql = validate_and_sanitize_sql(raw_sql, default_limit=100)
         total_found, warning, suggested_filters = await analyze_query_volume(safe_sql)
