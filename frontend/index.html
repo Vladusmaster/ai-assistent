@@ -4,119 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Личный кабинет | РЭУ им. Г.В. Плеханова</title>
-    <style>
-        :root {
-            --reu-main-blue: #0f1e33; 
-            --reu-top-blue: #222b38;  
-            --reu-green: #15d677;     
-            --reu-green-hover: #12b866;
-            --reu-bg: #f4f5f7;
-            --reu-text: #2d3748;
-            --reu-border: #e2e8f0;
-        }
-
-        body, html { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--reu-bg); height: 100%; display: flex; flex-direction: column; color: var(--reu-text); }
-        
-        .top-bar { background-color: var(--reu-top-blue); color: #a0aec0; padding: 8px 30px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
-        .top-links { display: flex; gap: 15px; align-items: center; }
-        .top-links span { cursor: pointer; transition: color 0.2s; }
-        .top-links span:hover { color: white; }
-        .priority-btn { background: white; color: black; padding: 4px 12px; border-radius: 12px; font-weight: bold; display: flex; align-items: center; gap: 5px; }
-        .priority-btn span { color: #3182ce; font-size: 14px; }
-
-        .header { background-color: var(--reu-main-blue); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 10; }
-        
-        .header-left { display: flex; align-items: center; gap: 20px; }
-        .logo-text { font-size: 26px; font-weight: bold; letter-spacing: 1px; font-family: serif; }
-        .university-name { font-size: 14px; font-weight: 600; max-width: 300px; line-height: 1.2; text-transform: uppercase; }
-        
-        .header-right { display: flex; align-items: center; gap: 15px; }
-        .header-icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; cursor: pointer; transition: opacity 0.2s; opacity: 0.8; }
-        .header-icon:hover { opacity: 1; }
-        
-        .btn-schedule { background-color: var(--reu-green); color: white; border: none; padding: 8px 20px; border-radius: 20px; font-weight: 600; cursor: pointer; transition: background 0.2s; font-size: 14px; }
-        .btn-schedule:hover { background-color: var(--reu-green-hover); }
-
-        .main-container { display: flex; flex-grow: 1; overflow: hidden; }
-
-        .sidebar { width: 260px; background-color: white; border-right: 1px solid var(--reu-border); display: flex; flex-direction: column; padding-top: 15px; }
-        .nav-item { padding: 12px 25px; color: var(--reu-text); text-decoration: none; font-size: 15px; cursor: pointer; transition: background 0.2s; border-left: 4px solid transparent; }
-        .nav-item:hover { background-color: #edf2f7; }
-        
-        .nav-item.opened { background-color: #f7fafc; color: #718096; font-weight: 500; display: flex; justify-content: space-between; }
-        .nav-item.sub-item { padding-left: 45px; font-size: 14.5px; }
-        .nav-item.active { background-color: #f0f4f8; color: var(--reu-main-blue); border-left-color: var(--reu-main-blue); font-weight: 600; }
-
-        .content-area { flex-grow: 1; padding: 30px; display: flex; flex-direction: column; align-items: center; overflow-y: auto; }
-        .page-title { width: 100%; max-width: 800px; margin-bottom: 20px; color: var(--reu-text); font-size: 24px; font-weight: bold; border-bottom: 2px solid var(--reu-border); padding-bottom: 12px; }
-
-        .chat-container { width: 100%; max-width: 800px; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); padding: 25px; display: flex; flex-direction: column; height: 65vh; border: 1px solid var(--reu-border); }
-        .chat-history { flex-grow: 1; overflow-y: auto; margin-bottom: 20px; padding-right: 10px; display: flex; flex-direction: column; }
-        .message { margin-bottom: 15px; padding: 14px 18px; border-radius: 8px; max-width: 85%; line-height: 1.5; font-size: 15px; }
-        
-        .user-msg { background-color: var(--reu-main-blue); color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
-        .bot-msg { background-color: #f7fafc; border: 1px solid var(--reu-border); align-self: flex-start; border-bottom-left-radius: 2px; color: var(--reu-text); }
-        
-        .input-group { display: flex; gap: 10px; }
-        input[type="text"] { flex-grow: 1; padding: 14px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 15px; outline: none; transition: border 0.2s; }
-        input[type="text"]:focus { border-color: var(--reu-main-blue); }
-        
-        .btn-send { padding: 14px 28px; background-color: var(--reu-main-blue); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 500; transition: background 0.2s; }
-        .btn-send:hover { background-color: #1a2a40; }
-        
-        .loader { display: none; font-style: italic; color: #718096; font-size: 13px; margin-bottom: 12px; align-self: flex-start; }
-        
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; background: white; }
-        th, td { border: 1px solid var(--reu-border); padding: 10px; text-align: left; }
-        th { background-color: #f7fafc; color: var(--reu-text); font-weight: 600; border-bottom: 2px solid var(--reu-main-blue); }
-        code { background: #edf2f7; padding: 4px 8px; border-radius: 4px; font-family: monospace; color: var(--reu-main-blue); font-weight: bold; }
-        
-        details { margin-top: 12px; font-size: 13px; }
-        summary { cursor: pointer; color: #4a5568; font-weight: 600; outline: none; }
-        pre { background: #edf2f7; padding: 10px; border-radius: 6px; overflow-x: auto; font-size: 12px; color: #2d3748; }
-    </style>
+    <!-- Подключаем отдельный файл со стилями -->
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
 <div class="top-bar">
-    <div class="top-links">
-        <div class="priority-btn">приоритет <span>▲</span></div>
-        <span>Абитуриенту</span>
-        <span>Студенту</span>
-        <span>Наука</span>
-        <span>Высшие школы</span>
-        <span>Международная деятельность</span>
-    </div>
-    <div>РУС ⌄</div>
+    <!-- ... весь верхний блок ... -->
 </div>
 
 <div class="header">
-    <div class="header-left">
-        <div class="logo-text">120 ЛЕТ РЭУ.РФ</div>
-        <div class="university-name">Российский экономический<br>университет имени Г.В. Плеханова</div>
-    </div>
-    <div class="header-right">
-        <svg class="header-icon" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-        <svg class="header-icon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-        <svg class="header-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-        <svg class="header-icon" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-        <button class="btn-schedule">Расписание</button>
-    </div>
+    <!-- ... шапка РЭУ ... -->
 </div>
 
 <div class="main-container">
     <div class="sidebar">
-        <div class="nav-item">Главная</div>
-        <div class="nav-item">Расписание занятий</div>
-        <div class="nav-item opened">
-            Помощь
-            <span>⏷</span>
-        </div>
-        <div class="nav-item sub-item active">AI-ассистент БД</div>
-        <div class="nav-item">Электронная зачетка</div>
-        <div class="nav-item">Курсовые работы</div>
-        <div class="nav-item">Военный учебный центр</div>
-        <div class="nav-item">Настройки</div>
+        <!-- ... боковое меню ... -->
     </div>
 
     <div class="content-area">
@@ -124,98 +27,21 @@
         
         <div class="chat-container">
             <div class="chat-history" id="chatHistory">
-                <div class="message bot-msg">Привет! Я встроенный AI-ассистент. Помогу составить SQL-запрос или найти нужные данные в реестрах университета. Какой у вас вопрос?</div>
+                <div class="message bot-msg">Привет! Я встроенный AI-ассистент. Какой у вас вопрос?</div>
             </div>
             
             <div class="loader" id="loader">Ассистент обрабатывает запрос...</div>
             
             <div class="input-group">
-                <input type="text" id="userInput" placeholder="Например: Показать всех студентов из таблицы students" onkeypress="handleKeyPress(event)">
+                <input type="text" id="userInput" placeholder="Например: Покажи всех студентов из таблицы students" onkeypress="handleKeyPress(event)">
                 <button class="btn-send" onclick="sendMessage()">Отправить</button>
             </div>
         </div>
     </div>
 </div>
 
-<script>
-    const chatHistory = document.getElementById('chatHistory');
-    const userInput = document.getElementById('userInput');
-    const loader = document.getElementById('loader');
-
-    function handleKeyPress(event) {
-        if (event.key === 'Enter') sendMessage();
-    }
-
-    async function sendMessage() {
-        const text = userInput.value.trim();
-        if (!text) return;
-
-        addMessage(text, 'user-msg');
-        userInput.value = '';
-        loader.style.display = 'block';
-
-        try {
-            const response = await fetch('http://127.0.0.1:8000/api/ask', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question: text })
-            });
-
-            if (!response.ok) throw new Error('Ошибка сервера');
-            
-            const data = await response.json();
-            
-            let botReply = `<p><b>Сгенерированный SQL:</b> <code>${data.generated_sql || 'Не сгенерирован'}</code></p>`;
-            
-            if (data.status === 'error') {
-                botReply += `<p style="color: #c53030; font-weight: bold;">Ошибка: ${data.message}</p>`;
-            } else if (data.columns && data.rows) {
-                if (data.rows.length === 0) {
-                    botReply += '<p><i>Запрос выполнен успешно, но данных по этому условию не найдено.</i></p>';
-                } else {
-                    botReply += '<table><thead><tr>';
-                    data.columns.forEach(col => {
-                        botReply += `<th>${col}</th>`;
-                    });
-                    botReply += '</tr></thead><tbody>';
-                    
-                    data.rows.forEach(row => {
-                        botReply += '<tr>';
-                        row.forEach(cell => {
-                            botReply += `<td>${cell !== null ? cell : ''}</td>`;
-                        });
-                        botReply += '</tr>';
-                    });
-                    botReply += '</tbody></table>';
-                }
-            }
-
-            // Раскрывающийся блок с исходным JSON
-            botReply += `
-                <details>
-                    <summary>Показать исходный JSON ответа</summary>
-                    <pre>${JSON.stringify(data, null, 2)}</pre>
-                </details>
-            `;
-
-            addMessage(botReply, 'bot-msg');
-
-        } catch (error) {
-            addMessage('<span style="color: #c53030;">Произошла ошибка при подключении к серверу. Убедитесь, что бэкенд запущен.</span>', 'bot-msg');
-            console.error(error);
-        } finally {
-            loader.style.display = 'none';
-        }
-    }
-
-    function addMessage(htmlContent, className) {
-        const msgDiv = document.createElement('div');
-        msgDiv.className = `message ${className}`;
-        msgDiv.innerHTML = htmlContent;
-        chatHistory.appendChild(msgDiv);
-        chatHistory.scrollTop = chatHistory.scrollHeight; 
-    }
-</script>
+<!-- Подключаем отдельный файл с логикой в самом конце -->
+<script src="js/script.js"></script>
 
 </body>
 </html>

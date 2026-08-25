@@ -5,12 +5,13 @@ services:
   api:
     build: .
     ports:
-      - "8080:8000"
+      - "8000:8000" # Исправили порт под наш фронтенд
     env_file:
       - .env
     depends_on:
       - db
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    # Исправили путь запуска на backend.main:app
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
   # База данных PostgreSQL
   db:
