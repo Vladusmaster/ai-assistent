@@ -6,7 +6,7 @@
 * **Backend:** Python 3.10+, FastAPI, Uvicorn
 * **Database Driver:** psycopg2-binary
 * **Frontend:** HTML5, CSS3, JavaScript (Fetch API)
-* **LLM Integration:** GigaChat API (Сбер)
+* **LLM Integration:** YANDEX GPT
 * **Containerization:** Docker, Docker Compose
 
 ## Архитектура безопасности
