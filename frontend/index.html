@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-ассистент Университета</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .chat-container { width: 100%; max-width: 800px; background: white; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); padding: 20px; display: flex; flex-direction: column; height: 80vh; }
+        .chat-history { flex-grow: 1; overflow-y: auto; margin-bottom: 20px; padding-right: 10px; }
+        .message { margin-bottom: 15px; padding: 10px; border-radius: 8px; max-width: 85%; line-height: 1.4; }
+        .user-msg { background-color: #e3f2fd; align-self: flex-end; margin-left: auto; }
+        .bot-msg { background-color: #f5f5f5; border: 1px solid #ddd; }
+        .input-group { display: flex; gap: 10px; }
+        input[type="text"] { flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
+        button { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        button:hover { background-color: #45a049; }
+        .loader { display: none; font-style: italic; color: #888; font-size: 14px; margin-bottom: 10px; }
+        
+        /* Стили для таблицы результатов */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #4CAF50; color: white; }
+    </style>
+</head>
+<body>
+
+<div class="chat-container">
+    <div class="chat-history" id="chatHistory">
+        <!-- Сообщения будут появляться здесь -->
+        <div class="message bot-msg">Привет! Я AI-ассистент. Какой у вас вопрос к базе данных?</div>
+    </div>
+    
+    <div class="loader" id="loader">Ассистент обрабатывает запрос...</div>
+    
+    <div class="input-group">
+        <input type="text" id="userInput" placeholder="Например: Сколько бюджетных мест осталось?" onkeypress="handleKeyPress(event)">
+        <button onclick="sendMessage()">Отправить</button>
+    </div>
+</div>
+
+<script>
+    const chatHistory = document.getElementById('chatHistory');
+    const userInput = document.getElementById('userInput');
+    const loader = document.getElementById('loader');
+
+    // Отправка по нажатию Enter
+    function handleKeyPress(event) {
+        if (event.key === 'Enter') sendMessage();
+    }
+
+    async function sendMessage() {
+        const text = userInput.value.trim();
+        if (!text) return;
+
+        // Добавляем вопрос пользователя в чат
+        addMessage(text, 'user-msg');
+        userInput.value = '';
+        
+        // Показываем индикатор загрузки
+        loader.style.display = 'block';
+
+        try {
+            // Отправляем POST-запрос на твой будущий бэкенд FastAPI
+            const response = await fetch('http://127.0.0.1:8000/api/ask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question: text })
+            });
+
+            if (!response.ok) throw new Error('Ошибка сервера');
+            
+            const data = await response.json();
+            
+            // Если в ответе есть SQL и данные, выводим их
+            let botReply = `<p><b>Сгенерированный SQL:</b> <code>${data.generated_sql}</code></p>`;
+            
+            // Заглушка для рендера таблицы (потом привяжем к реальным данным от Влада)
+            botReply += `
+                <table>
+                    <tr><th>Пример колонки 1</th><th>Пример колонки 2</th></tr>
+                    <tr><td>Данные</td><td>Данные</td></tr>
+                </table>
+            `;
+
+            addMessage(botReply, 'bot-msg');
+
+        } catch (error) {
+            addMessage('Произошла ошибка при подключении к серверу. Убедитесь, что бэкенд запущен.', 'bot-msg');
+            console.error(error);
+        } finally {
+            // Скрываем индикатор загрузки
+            loader.style.display = 'none';
+        }
+    }
+
+    function addMessage(htmlContent, className) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `message ${className}`;
+        msgDiv.innerHTML = htmlContent; // Используем innerHTML чтобы рендерить <table> и <code>
+        chatHistory.appendChild(msgDiv);
+        chatHistory.scrollTop = chatHistory.scrollHeight; // Автопрокрутка вниз
+    }
+</script>
+
+</body>
+</html>
