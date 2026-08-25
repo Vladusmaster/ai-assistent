@@ -520,7 +520,9 @@
                     botReply += `<p style="margin-top: 0;"><b>Ответ:</b> ${data.summary}</p>`;
                 }
                 
-                botReply += `<b>Сгенерированный SQL:</b><div class="sql-box">${data.sql}</div>`;
+                if (data.sql) {
+                    botReply += `<b>Сгенерированный SQL:</b><div class="sql-box">${data.sql}</div>`;
+                }
                 
                 if (data.explanation) {
                     const exp = data.explanation;
@@ -552,27 +554,23 @@
                     `;
                 }
 
-                if (data.columns && data.data) {
-                    if (data.data.length === 0) {
-                        botReply += '<p style="margin-top: 10px;"><i>Данных по заданному условию не найдено.</i></p>';
-                    } else {
-                        const tableId = 'tbl_' + Math.random().toString(36).substring(2, 9);
-                        tableStates.set(tableId, {
-                            columns: data.columns,
-                            rows: data.data,
-                            currentPage: 1,
-                            totalPages: Math.ceil(data.data.length / PAGE_SIZE)
-                        });
+                if (data.columns && data.data && data.data.length > 0) {
+                    const tableId = 'tbl_' + Math.random().toString(36).substring(2, 9);
+                    tableStates.set(tableId, {
+                        columns: data.columns,
+                        rows: data.data,
+                        currentPage: 1,
+                        totalPages: Math.ceil(data.data.length / PAGE_SIZE)
+                    });
 
-                        botReply += `
-                            <div class="table-wrap" id="wrap_${tableId}">
-                                ${renderTableHtml(tableId, 1)}
-                            </div>
-                            <div class="pagination-controls" id="ctrl_${tableId}">
-                                ${renderPaginationControls(tableId, 1)}
-                            </div>
-                        `;
-                    }
+                    botReply += `
+                        <div class="table-wrap" id="wrap_${tableId}">
+                            ${renderTableHtml(tableId, 1)}
+                        </div>
+                        <div class="pagination-controls" id="ctrl_${tableId}">
+                            ${renderPaginationControls(tableId, 1)}
+                        </div>
+                    `;
                 }
             }
 
