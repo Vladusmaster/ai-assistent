@@ -1,6 +1,6 @@
 import os
 import asyncpg
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -11,11 +11,11 @@ DB_NAME = os.getenv("DB_NAME", "vesna-db5").strip()
 DB_USER = os.getenv("DB_USER", "vdb5_user").strip()
 DB_PASSWORD = os.getenv("DB_PASSWORD", "X59b39C9-5D4X4NHn").strip()
 
-pool: asyncpg.Pool = None
+_pool: Optional[asyncpg.Pool] = None
 
 async def init_db_pool():
-    global pool
-    pool = await asyncpg.create_pool(
+    global _pool
+    _pool = await asyncpg.create_pool(
         host=DB_HOST,
         port=DB_PORT,
         user=DB_USER,
@@ -24,10 +24,19 @@ async def init_db_pool():
         min_size=2,
         max_size=10
     )
-    # Добавьте в функцию init_db_pool() или выполните один раз:
+
+async def close_db_pool():
+    global _pool
+    if _pool:
+        await _pool.close()
+
+def get_db_pool() -> asyncpg.Pool:
+    if not _pool:
+        raise RuntimeError("Пул соединений с БД не инициализирован.")
+    return _pool
+
 async def create_log_table():
-    if not pool:
-        return
+    pool = get_db_pool()
     async with pool.acquire() as conn:
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS query_logs (
@@ -42,9 +51,8 @@ async def create_log_table():
         """)
 
 async def log_user_query(question: str, sql: str | None, time_ms: float, status: str, error: str | None = None):
-    if not pool:
-        return
     try:
+        pool = get_db_pool()
         async with pool.acquire() as conn:
             await conn.execute(
                 """INSERT INTO query_logs (user_question, generated_sql, execution_time_ms, status, error_message)
@@ -54,15 +62,8 @@ async def log_user_query(question: str, sql: str | None, time_ms: float, status:
     except Exception as e:
         print(f"Ошибка записи лога: {e}")
 
-async def close_db_pool():
-    global pool
-    if pool:
-        await pool.close()
-
 async def execute_safe_query(sql_query: str) -> Tuple[List[str], List[Dict[str, Any]]]:
-    if not pool:
-        raise RuntimeError("Пул соединений с БД не инициализирован.")
-        
+    pool = get_db_pool()
     async with pool.acquire() as conn:
         async with conn.transaction():
             await conn.execute("SET LOCAL statement_timeout = '3000ms';")

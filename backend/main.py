@@ -1,9 +1,15 @@
+# ==============================================================================
+# ФАЙЛ: backend/main.py (ЗАМЕНИТЬ ПОЛНОСТЬЮ)
+# ==============================================================================
+
 import time
 import os
 import sys
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from typing import Tuple, Optional, List
+import asyncpg
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -16,9 +22,21 @@ if CURRENT_DIR not in sys.path:
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from database import init_db_pool, close_db_pool, execute_safe_query, create_log_table, log_user_query, pool
-from security import validate_and_sanitize_sql, SecurityError
-from llm import generate_sql_and_explanation, ask_yandex_gpt_analytics
+from database import (
+    init_db_pool,
+    close_db_pool,
+    get_db_pool,
+    execute_safe_query,
+    create_log_table,
+    log_user_query
+)
+from security import (
+    check_prompt_security_intent,
+    validate_and_sanitize_sql,
+    SecurityViolationError,
+    UnrecognizedQueryError
+)
+from llm import generate_sql_and_explanation, fix_sql_with_error, ask_yandex_gpt_analytics
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
@@ -44,20 +62,80 @@ app.add_middleware(
 class QueryRequest(BaseModel):
     question: str
 
+async def analyze_query_volume(base_sql: str) -> Tuple[int, Optional[str], List[str]]:
+    if not base_sql or base_sql == "—":
+        return 0, None, []
+        
+    clean_sql = base_sql.split(" LIMIT ")[0].rstrip(";")
+    count_sql = f"SELECT COUNT(*) AS total FROM ({clean_sql}) AS subquery_count"
+    
+    warning = None
+    suggested_filters: List[str] = []
+    
+    try:
+        pool = get_db_pool()
+        async with pool.acquire() as conn:
+            total_records = await conn.fetchval(count_sql)
+            
+            if total_records and total_records > 20:
+                warning = f"Широкая выборка: найдено {total_records} записей. Применена пагинация."
+                if "applications" in clean_sql:
+                    suggested_filters = ["Указать год (campaign_year = 2026)", "Выбрать статус (status = 'Зачислен')", "Фильтр по форме (study_form = 'Очная')"]
+                elif "students" in clean_sql:
+                    suggested_filters = ["Фильтр по курсу (study_year = 1)", "Фильтр по группе (study_group = 'ПИ-231')", "Только обучающиеся (student_status = 'Обучается')"]
+                elif "grades" in clean_sql:
+                    suggested_filters = ["Указать семестр (semester = 2)", "Только задолженности (has_academic_debt = true)"]
+                else:
+                    suggested_filters = ["Уточните факультет или кафедру", "Добавьте временной интервал"]
+                    
+            return total_records or 0, warning, suggested_filters
+    except Exception:
+        return 0, None, []
+
 @app.post("/api/ask")
 async def ask_question(req: QueryRequest):
     start_time = time.perf_counter()
     logging.info(f"Получен вопрос: {req.question}")
     
     try:
+        check_prompt_security_intent(req.question)
+
         llm_response = await generate_sql_and_explanation(req.question)
-        raw_sql = llm_response.get("sql", "")
+        raw_sql = llm_response.get("sql", "").strip()
         explanation = llm_response.get("explanation", {})
         summary_ru = llm_response.get("summary_ru", "")
         
-        safe_sql = validate_and_sanitize_sql(raw_sql, default_limit=100)
-        columns, rows = await execute_safe_query(safe_sql)
+        if not raw_sql:
+            execution_time = (time.perf_counter() - start_time) * 1000
+            await log_user_query(req.question, None, execution_time, "UNRECOGNIZED_PROMPT")
+            return {
+                "status": "info",
+                "type": "unrecognized_query",
+                "message": summary_ru or "Запрос не распознан. Пожалуйста, сформулируйте вопрос о структуре или аналитике университета."
+            }
         
+        safe_sql = validate_and_sanitize_sql(raw_sql, default_limit=100)
+        
+        try:
+            columns, rows = await execute_safe_query(safe_sql)
+        except asyncpg.PostgresError as pe:
+            logging.warning(f"Ошибка выполнения SQL ({pe.message}). Запуск Self-Correction...")
+            fixed_response = await fix_sql_with_error(req.question, safe_sql, pe.message)
+            raw_sql = fixed_response.get("sql", "").strip()
+            
+            if not raw_sql:
+                return {
+                    "status": "info",
+                    "type": "unrecognized_query",
+                    "message": "Не удалось сформировать корректный запрос к базе данных. Уточните формулировку вопроса."
+                }
+                
+            explanation = fixed_response.get("explanation", {})
+            summary_ru = fixed_response.get("summary_ru", "")
+            safe_sql = validate_and_sanitize_sql(raw_sql, default_limit=100)
+            columns, rows = await execute_safe_query(safe_sql)
+            
+        total_found, warning, suggested_filters = await analyze_query_volume(safe_sql)
         execution_time = (time.perf_counter() - start_time) * 1000
         await log_user_query(req.question, safe_sql, execution_time, "SUCCESS")
         
@@ -69,38 +147,70 @@ async def ask_question(req: QueryRequest):
             "columns": columns,
             "data": rows,
             "count": len(rows),
+            "total_available": total_found,
+            "warning": warning,
+            "suggested_filters": suggested_filters,
             "execution_time_ms": round(execution_time, 2)
         }
         
-    except SecurityError as se:
+    except SecurityViolationError as sve:
         execution_time = (time.perf_counter() - start_time) * 1000
-        await log_user_query(req.question, None, execution_time, "SECURITY_BLOCKED", str(se))
+        await log_user_query(req.question, None, execution_time, "SECURITY_BLOCKED", str(sve))
         return {
             "status": "error",
             "type": "security_violation",
-            "message": str(se)
+            "message": str(sve)
+        }
+    except UnrecognizedQueryError as uqe:
+        execution_time = (time.perf_counter() - start_time) * 1000
+        await log_user_query(req.question, None, execution_time, "UNRECOGNIZED_QUERY", str(uqe))
+        return {
+            "status": "info",
+            "type": "unrecognized_query",
+            "message": "По данному запросу не удалось сопоставить таблицы или параметры. Уточните вопрос (например: кафедры, преподаватели, заявления 2026)."
+        }
+    except asyncpg.PostgresError as pe:
+        execution_time = (time.perf_counter() - start_time) * 1000
+        await log_user_query(req.question, raw_sql if 'raw_sql' in locals() else None, execution_time, "DB_ERROR", str(pe))
+        return {
+            "status": "error",
+            "type": "db_error",
+            "message": f"Ошибка выполнения запроса в СУБД: {pe.message}."
         }
     except Exception as e:
         execution_time = (time.perf_counter() - start_time) * 1000
-        await log_user_query(req.question, None, execution_time, "ERROR", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        await log_user_query(req.question, None, execution_time, "SYSTEM_ERROR", str(e))
+        return {
+            "status": "error",
+            "type": "system_error",
+            "message": f"Ошибка обработки: {str(e)}"
+        }
 
 @app.get("/api/analytics")
 async def get_analytics():
-    async with pool.acquire() as conn:
-        records = await conn.fetch("SELECT user_question, status, execution_time_ms FROM query_logs ORDER BY id DESC LIMIT 50")
-        total_queries = await conn.fetchval("SELECT count(*) FROM query_logs")
-        avg_time = await conn.fetchval("SELECT AVG(execution_time_ms) FROM query_logs WHERE status = 'SUCCESS'")
+    try:
+        pool = get_db_pool()
+        async with pool.acquire() as conn:
+            records = await conn.fetch("SELECT user_question, status, execution_time_ms FROM query_logs ORDER BY id DESC LIMIT 50")
+            total_queries = await conn.fetchval("SELECT count(*) FROM query_logs")
+            avg_time = await conn.fetchval("SELECT AVG(execution_time_ms) FROM query_logs WHERE status = 'SUCCESS'")
+            
+        log_texts = [f"- Вопрос: {r['user_question']} | Статус: {r['status']}" for r in records]
+        ai_summary = await ask_yandex_gpt_analytics("\n".join(log_texts))
         
-    log_texts = [f"- Вопрос: {r['user_question']} | Статус: {r['status']}" for r in records]
-    ai_summary = await ask_yandex_gpt_analytics("\n".join(log_texts))
-    
-    return {
-        "total_queries": total_queries or 0,
-        "avg_execution_time_ms": round(avg_time or 0, 2),
-        "ai_insights": ai_summary,
-        "recent_logs": [dict(r) for r in records[:10]]
-    }
+        return {
+            "total_queries": total_queries or 0,
+            "avg_execution_time_ms": round(avg_time or 0, 2),
+            "ai_insights": ai_summary,
+            "recent_logs": [dict(r) for r in records[:10]]
+        }
+    except Exception as e:
+        return {
+            "total_queries": 0,
+            "avg_execution_time_ms": 0,
+            "ai_insights": f"Ошибка сбора аналитики: {str(e)}",
+            "recent_logs": []
+        }
 
 frontend_dir = os.path.join(PROJECT_ROOT, "frontend")
 if os.path.exists(frontend_dir):

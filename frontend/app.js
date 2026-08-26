@@ -4,6 +4,9 @@ const userInput = document.getElementById('userInput');
 const loader = document.getElementById('loader');
 const sendBtn = document.getElementById('sendBtn');
 
+window.tableStorage = window.tableStorage || new Map();
+const PAGE_SIZE = 20;
+
 function toggleChat(forceState) {
     const isVisible = chatOverlay.style.display === 'flex';
     const newState = forceState !== undefined ? forceState : !isVisible;
@@ -24,15 +27,21 @@ function clearChat() {
     chatHistory.innerHTML = `
         <div class="message bot-msg">
             <div class="msg-content">
-                Диалог очищен. Задайте новый вопрос к базе данных РЭУ им. Г.В. Плеханова.
+                Чат очищен. Задайте новый вопрос к базе данных РЭУ им. Г.В. Плеханова.
             </div>
         </div>
     `;
+    window.tableStorage.clear();
 }
 
 function quickSend(promptText) {
     userInput.value = promptText;
     sendMessage();
+}
+
+function applyFilter(filterText) {
+    userInput.value = userInput.value ? `${userInput.value} (${filterText})` : filterText;
+    userInput.focus();
 }
 
 function handleKeyPress(event) {
@@ -58,6 +67,72 @@ function copySql(btn) {
         setTimeout(() => btn.innerText = 'Копировать', 1500);
     });
 }
+
+function renderTableRows(tableId, page) {
+    const state = window.tableStorage.get(tableId);
+    if (!state) return '';
+
+    const start = (page - 1) * PAGE_SIZE;
+    const end = start + PAGE_SIZE;
+    const pageRows = state.rows.slice(start, end);
+
+    let html = `<table class="data-table"><thead><tr>`;
+    state.columns.forEach(col => {
+        html += `<th>${escapeHtml(col)}</th>`;
+    });
+    html += `</tr></thead><tbody>`;
+
+    pageRows.forEach(row => {
+        html += `<tr>`;
+        state.columns.forEach(col => {
+            const val = row[col];
+            html += `<td>${escapeHtml(val !== null && val !== undefined ? val : '—')}</td>`;
+        });
+        html += `</tr>`;
+    });
+    html += `</tbody></table>`;
+    return html;
+}
+
+function renderPaginationBar(tableId, page) {
+    const state = window.tableStorage.get(tableId);
+    if (!state) return '';
+
+    const totalPages = state.totalPages;
+    const totalCount = state.rows.length;
+    const startIdx = (page - 1) * PAGE_SIZE + 1;
+    const endIdx = Math.min(page * PAGE_SIZE, totalCount);
+
+    return `
+        <div class="pagination-info">
+            Показаны <b>${startIdx}–${endIdx}</b> из <b>${totalCount}</b> (Стр. <b>${page}</b>/<b>${totalPages}</b>)
+        </div>
+        <div class="pagination-actions">
+            <button class="btn-page" onclick="changePage('${tableId}', -1)" ${page <= 1 ? 'disabled' : ''}>
+                ← Назад
+            </button>
+            <button class="btn-page" onclick="changePage('${tableId}', 1)" ${page >= totalPages ? 'disabled' : ''}>
+                Вперед →
+            </button>
+        </div>
+    `;
+}
+
+window.changePage = function(tableId, delta) {
+    const state = window.tableStorage.get(tableId);
+    if (!state) return;
+
+    const newPage = state.currentPage + delta;
+    if (newPage < 1 || newPage > state.totalPages) return;
+
+    state.currentPage = newPage;
+
+    const wrapEl = document.getElementById(`wrap_${tableId}`);
+    const ctrlEl = document.getElementById(`ctrl_${tableId}`);
+
+    if (wrapEl) wrapEl.innerHTML = renderTableRows(tableId, newPage);
+    if (ctrlEl) ctrlEl.innerHTML = renderPaginationBar(tableId, newPage);
+};
 
 async function sendMessage() {
     const text = userInput.value.trim();
@@ -115,10 +190,24 @@ function appendBotHtml(html) {
 }
 
 function renderBotResponse(data) {
+    if (data.status === 'info' || data.type === 'unrecognized_query') {
+        appendBotHtml(`
+            <div class="warning-banner" style="background: #eff6ff; border-color: #bfdbfe; border-left-color: #3b82f6;">
+                <div class="warning-header" style="color: #1e40af;">ℹ️ Внимание:</div>
+                <div style="font-size: 13.5px; color: #1e3a8a;">${escapeHtml(data.message || data.summary)}</div>
+            </div>
+        `);
+        return;
+    }
+
     if (data.status === 'error') {
+        const errorTitle = data.type === 'security_violation'
+            ? 'Отклонено системой безопасности'
+            : (data.type === 'db_error' ? 'Ошибка структуры запроса к БД' : 'Сбой обработки');
+
         appendBotHtml(`
             <div class="error-card">
-                ⚠️ <b>Отклонено системой безопасности:</b> ${escapeHtml(data.message)}
+                ⚠️ <b>${escapeHtml(errorTitle)}:</b> ${escapeHtml(data.message)}
             </div>
         `);
         return;
@@ -149,6 +238,21 @@ function renderBotResponse(data) {
         `;
     }
 
+    if (data.warning) {
+        let chipsHtml = '';
+        if (data.suggested_filters && data.suggested_filters.length > 0) {
+            chipsHtml = `<div class="filter-chips">` +
+                data.suggested_filters.map(f => `<span class="chip-filter" onclick="applyFilter('${escapeHtml(f)}')">+ ${escapeHtml(f)}</span>`).join('') +
+                `</div>`;
+        }
+        html += `
+            <div class="warning-banner">
+                <div class="warning-header">⚠️ ${escapeHtml(data.warning)}</div>
+                ${chipsHtml}
+            </div>
+        `;
+    }
+
     if (data.sql && data.sql !== '—') {
         html += `
             <div class="sql-card">
@@ -161,29 +265,30 @@ function renderBotResponse(data) {
         `;
     }
 
-    if (data.columns && data.data) {
+    if (data.columns && data.columns.length > 0 && data.data) {
         if (data.data.length === 0) {
             html += '<p style="color: #64748b; font-style: italic; margin-top: 10px;">Записей по заданному критерию не обнаружено.</p>';
         } else {
-            html += '<div class="table-container"><table class="data-table"><thead><tr>';
-            data.columns.forEach(col => {
-                html += `<th>${escapeHtml(col)}</th>`;
-            });
-            html += '</tr></thead><tbody>';
+            const tableId = 'tbl_' + Math.random().toString(36).substring(2, 9);
+            const totalPages = Math.max(1, Math.ceil(data.data.length / PAGE_SIZE));
 
-            data.data.forEach(row => {
-                html += '<tr>';
-                data.columns.forEach(col => {
-                    const val = row[col];
-                    html += `<td>${escapeHtml(val !== null && val !== undefined ? val : '—')}</td>`;
-                });
-                html += '</tr>';
+            window.tableStorage.set(tableId, {
+                columns: data.columns,
+                rows: data.data,
+                currentPage: 1,
+                totalPages: totalPages
             });
-            html += '</tbody></table></div>';
+
             html += `
+                <div class="table-container" id="wrap_${tableId}">
+                    ${renderTableRows(tableId, 1)}
+                </div>
+                <div class="pagination-bar" id="ctrl_${tableId}">
+                    ${renderPaginationBar(tableId, 1)}
+                </div>
                 <div class="table-footer">
                     <span>Транзакция выполнена успешно</span>
-                    <span>Всего строк: <b>${data.count}</b></span>
+                    <span>Всего строк в выборке: <b>${data.count}</b></span>
                 </div>
             `;
         }
