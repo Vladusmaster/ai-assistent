@@ -21,12 +21,21 @@
 
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background-color: #edf2f7;
     color: var(--reu-text-main);
     line-height: 1.5;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+
+    /* Фоновое изображение здания РЭУ с полупрозрачным затемнением */
+    background: 
+        linear-gradient(rgba(11, 26, 48, 0.75), rgba(7, 14, 24, 0.85)),
+        url("https://www.rea.ru/storage/image/e1/e1a5e4a47b618f14e02fe3fa976de608.jpg");
+    
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed; /* Фиксирует фон при скролле страницы */
 }
 
 .reu-topbar {
@@ -37,9 +46,9 @@ body {
 }
 
 .topbar-inner {
-    max-width: 1440px;
-    margin: 0 auto;
-    padding: 7px 32px;
+    max-width: 100%;       /* Было 1440px: растягивает на всю ширину */
+    margin: 0;             /* Убирает центрирование и пустые зоны по бокам */
+    padding: 7px 20px;     /* Минимальный аккуратный отступ от края экрана */
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -100,9 +109,9 @@ body {
 }
 
 .header-inner {
-    max-width: 1440px;
-    margin: 0 auto;
-    padding: 14px 32px;
+    max-width: 100%;       /* Растягивает шапку на всю ширину экрана */
+    margin: 0;
+    padding: 14px 20px;    /* Боковой отступ выровнен с верхней панелью */
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -193,10 +202,10 @@ body {
 
 .reu-portal {
     flex-grow: 1;
-    max-width: 1440px;
+    max-width: 100%;       /* Растягивает плашки на всю ширину окна */
     width: 100%;
-    margin: 0 auto;
-    padding: 32px;
+    margin: 0;             /* Убирает боковые пустые поля */
+    padding: 20px;         /* Отступ от краев экрана (при желании можно поставить 10px или 0) */
 }
 
 .hero-admission {
@@ -523,7 +532,29 @@ body {
     display: flex;
     flex-direction: column;
     gap: 18px;
-    background: #f8fafc;
+    position: relative; /* Обязательно для позиционирования фона */
+}
+
+/* Полупрозрачный логотип по центру */
+.chat-messages::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url("https://avatars.mds.yandex.net/i?id=b126765c1625a4c051ab0b07d7a6c00757a0c111-5655212-images-thumbs&n=13");
+    background-repeat: no-repeat;
+    background-position: center; /* Растягивает фон на всю ширину и высоту окна */
+    opacity: 0.99;          /* Плотность водяного знака */
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Поднятие сообщений над фоном */
+.chat-messages > * {
+    position: relative;
+    z-index: 1;
 }
 
 .message {
