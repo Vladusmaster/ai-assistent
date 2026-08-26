@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Российский экономический университет имени Г.В. Плеханова | РЭУ.РФ</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,700;1,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="reu-topbar">
+        <div class="topbar-inner">
+            <div class="topbar-left">
+                <a href="#" class="priority-pill">
+                    <span>приоритет</span>
+                    <svg viewBox="0 0 24 24" width="10" height="10"><path fill="#2563eb" d="M12 4l-8 14h16z"/></svg>
+                </a>
+                <nav class="topbar-nav">
+                    <a href="#">Абитуриенту</a>
+                    <a href="#">Студенту</a>
+                    <a href="#">Наука</a>
+                    <a href="#">Высшие школы</a>
+                    <a href="#">Международная деятельность</a>
+                    <a href="#">Международная Олимпиада Open Doors</a>
+                </nav>
+            </div>
+            <div class="topbar-right">
+                <div class="lang-switch">
+                    <span>РУС</span>
+                    <svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <header class="reu-header">
+        <div class="header-inner">
+            <div class="brand-block">
+                <div class="brand-120">
+                    <span class="num-120">120</span>
+                    <div class="brand-sub">
+                        <span class="let-badge">ЛЕТ</span>
+                        <span class="brand-url">РЭУ.РФ</span>
+                    </div>
+                </div>
+                <div class="brand-divider"></div>
+                <div class="university-title">РОССИЙСКИЙ ЭКОНОМИЧЕСКИЙ УНИВЕРСИТЕТ ИМЕНИ Г.В. ПЛЕХАНОВА</div>
+            </div>
+
+            <div class="header-actions">
+                <button class="icon-action-btn" title="Версия для слабовидящих">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+                <button class="icon-action-btn" title="Личный кабинет">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </button>
+                <button class="icon-action-btn" title="Поиск">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                </button>
+                <button class="icon-action-btn" title="Меню">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+                </button>
+                <button class="btn-ai-trigger" onclick="toggleChat(true)">
+                    <span class="sparkle-icon">✨</span>
+                    <span>AI-ассистент по БД</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="reu-portal">
+        <section class="hero-admission">
+            <div class="hero-ribbon">
+                <div class="hero-tagline">
+                    <h1 class="hero-main-txt">ПОСТУПАЙ</h1>
+                    <span class="hero-sub-txt">В ПЛЕХАНОВСКИЙ УНИВЕРСИТЕТ</span>
+                </div>
+                <div class="hero-desc">
+                    <p>Целая вселенная возможностей — узнай больше и стань студентом РЭУ имени Г.В. Плеханова</p>
+                </div>
+            </div>
+            
+            <div class="hero-cards-grid">
+                <div class="hero-card ranking-card">
+                    <div class="ranking-badge">
+                        <span class="qs-badge">QS</span>
+                        <div class="qs-text">
+                            <strong>WORLD</strong>
+                            <span>UNIVERSITY RANKINGS</span>
+                        </div>
+                    </div>
+                    <h2>РЭУ в мировом рейтинге QS 2026</h2>
+                    <p>Лидерство в экономическом, цифровом и прикладном анализе данных в образовательном пространстве РФ.</p>
+                </div>
+
+                <div class="hero-card ai-showcase-card" onclick="toggleChat(true)">
+                    <div class="ai-chip">Система 2026</div>
+                    <h3>Интеллектуальный ассистент СУБД</h3>
+                    <p>Интерактивная аналитика данных вуза на естественном языке с автоматической трансляцией в безопасный SQL.</p>
+                    <button class="btn-card-launch">Открыть диалоговое окно →</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <button class="floating-ai-btn" onclick="toggleChat()" title="Открыть AI-ассистента">
+        <span class="ai-pulse"></span>
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+    </button>
+
+    <div class="chat-modal-overlay" id="chatOverlay" onclick="handleOverlayClick(event)">
+        <div class="chat-window">
+            
+            <div class="chat-header">
+                <div class="chat-title-group">
+                    <div class="ai-avatar">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2a10 10 0 0 1 10 10c0 5.523-4.477 10-10 10S2 17.523 2 12A10 10 0 0 1 12 2z"/>
+                            <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                            <line x1="9" y1="9" x2="9.01" y2="9"/>
+                            <line x1="15" y1="9" x2="15.01" y2="9"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="chat-title">AI-Аналитик СУБД РЭУ</div>
+                        <div class="chat-status">
+                            <span class="status-dot"></span> PostgreSQL Online | AST Security Guard | 3000ms
+                        </div>
+                    </div>
+                </div>
+                <div class="chat-controls">
+                    <button class="ctrl-btn" onclick="clearChat()" title="Очистить диалог">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
+                    <button class="ctrl-btn" onclick="toggleChat(false)" title="Закрыть">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="prompt-chips">
+                <button class="chip" onclick="quickSend('Покажи список деканов и их высшие школы')">🎓 Деканы и школы</button>
+                <button class="chip" onclick="quickSend('Сколько заявлений подано в 2026 году?')">📊 Заявления 2026</button>
+                <button class="chip" onclick="quickSend('Какие кафедры относятся к IT-факультету?')">💻 Кафедры IT</button>
+                <button class="chip" onclick="quickSend('Покажи расписание аудиторий 1 корпуса')">🏛️ Аудитории Корпус 1</button>
+                <button class="chip chip-danger" onclick="quickSend('DELETE FROM students')">⚠️ Тест защиты (DELETE)</button>
+            </div>
+
+            <div class="chat-messages" id="chatHistory">
+                <div class="message bot-msg">
+                    <div class="msg-content">
+                        Здравствуйте! Я интеллектуальный ассистент аналитики данных РЭУ им. Г.В. Плеханова. Задайте вопрос по структуре вуза, деканатам, образовательным программам, заявлениям или учебным показателям.
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-loader" id="loader">
+                <div class="spinner"></div>
+                <span>Генерация безопасного SQL, валидация AST и выборка из PostgreSQL...</span>
+            </div>
+
+            <div class="chat-input-container">
+                <input type="text" id="userInput" placeholder="Сформулируйте аналитический запрос..." onkeypress="handleKeyPress(event)" autocomplete="off">
+                <button class="btn-send-message" id="sendBtn" onclick="sendMessage()">
+                    <span>Отправить</span>
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="22" y1="2" x2="11" y2="13"/>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                    </svg>
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
