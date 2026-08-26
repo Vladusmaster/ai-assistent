@@ -14,143 +14,143 @@ DB_USER = os.getenv("DB_USER", "vdb5_user").strip()
 DB_PASSWORD = os.getenv("DB_PASSWORD", "X59b39C9-5D4X4NHn").strip()
 
 DDL_SCHEMA = """
-DROP TABLE IF EXISTS "расписание" CASCADE;
-DROP TABLE IF EXISTS "оценки" CASCADE;
-DROP TABLE IF EXISTS "дисциплины" CASCADE;
-DROP TABLE IF EXISTS "аудитории" CASCADE;
-DROP TABLE IF EXISTS "студенты" CASCADE;
-DROP TABLE IF EXISTS "заявления" CASCADE;
-DROP TABLE IF EXISTS "абитуриенты" CASCADE;
-DROP TABLE IF EXISTS "направления" CASCADE;
-DROP TABLE IF EXISTS "преподаватели" CASCADE;
-DROP TABLE IF EXISTS "кафедры" CASCADE;
-DROP TABLE IF EXISTS "факультеты" CASCADE;
+DROP TABLE IF EXISTS schedules CASCADE;
+DROP TABLE IF EXISTS grades CASCADE;
+DROP TABLE IF EXISTS disciplines CASCADE;
+DROP TABLE IF EXISTS classrooms CASCADE;
+DROP TABLE IF EXISTS students CASCADE;
+DROP TABLE IF EXISTS applications CASCADE;
+DROP TABLE IF EXISTS applicants CASCADE;
+DROP TABLE IF EXISTS programs CASCADE;
+DROP TABLE IF EXISTS teachers CASCADE;
+DROP TABLE IF EXISTS departments CASCADE;
+DROP TABLE IF EXISTS faculties CASCADE;
 
-CREATE TABLE "факультеты" (
-    "id" SERIAL PRIMARY KEY,
-    "название" VARCHAR(255) NOT NULL UNIQUE,
-    "сокращение" VARCHAR(50) NOT NULL,
-    "декан_фио" VARCHAR(255) NOT NULL,
-    "корпус" VARCHAR(100) NOT NULL,
-    "электронная_почта" VARCHAR(100) NOT NULL
+CREATE TABLE faculties (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    short_name VARCHAR(50) NOT NULL,
+    dean_full_name VARCHAR(255) NOT NULL,
+    building VARCHAR(100) NOT NULL,
+    email VARCHAR(100) NOT NULL
 );
 
-CREATE TABLE "кафедры" (
-    "id" SERIAL PRIMARY KEY,
-    "факультет_id" INT NOT NULL REFERENCES "факультеты"("id") ON DELETE CASCADE,
-    "название" VARCHAR(255) NOT NULL,
-    "заведующий_фио" VARCHAR(255) NOT NULL
+CREATE TABLE departments (
+    id SERIAL PRIMARY KEY,
+    faculty_id INT NOT NULL REFERENCES faculties(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    head_full_name VARCHAR(255) NOT NULL
 );
 
-CREATE TABLE "преподаватели" (
-    "id" SERIAL PRIMARY KEY,
-    "кафедра_id" INT NOT NULL REFERENCES "кафедры"("id") ON DELETE CASCADE,
-    "фио" VARCHAR(255) NOT NULL,
-    "ученая_степень" VARCHAR(100) NOT NULL,
-    "ученое_звание" VARCHAR(100) NOT NULL,
-    "должность" VARCHAR(100) NOT NULL,
-    "электронная_почта" VARCHAR(100) NOT NULL
+CREATE TABLE teachers (
+    id SERIAL PRIMARY KEY,
+    department_id INT NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+    full_name VARCHAR(255) NOT NULL,
+    academic_degree VARCHAR(100) NOT NULL,
+    academic_title VARCHAR(100) NOT NULL,
+    position VARCHAR(100) NOT NULL,
+    email VARCHAR(100) NOT NULL
 );
 
-CREATE TABLE "направления" (
-    "id" SERIAL PRIMARY KEY,
-    "факультет_id" INT NOT NULL REFERENCES "факультеты"("id") ON DELETE CASCADE,
-    "код_направления" VARCHAR(20) NOT NULL,
-    "название" VARCHAR(255) NOT NULL,
-    "уровень_образования" VARCHAR(50) NOT NULL,
-    "бюджетные_места" INT NOT NULL DEFAULT 0,
-    "платные_места" INT NOT NULL DEFAULT 0,
-    "квота_особая" INT NOT NULL DEFAULT 0,
-    "квота_целевая" INT NOT NULL DEFAULT 0,
-    "квота_отдельная" INT NOT NULL DEFAULT 0,
-    "стоимость_обучения_год" INT NOT NULL DEFAULT 0
+CREATE TABLE programs (
+    id SERIAL PRIMARY KEY,
+    faculty_id INT NOT NULL REFERENCES faculties(id) ON DELETE CASCADE,
+    program_code VARCHAR(20) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    education_level VARCHAR(50) NOT NULL,
+    budget_places INT NOT NULL DEFAULT 0,
+    commercial_places INT NOT NULL DEFAULT 0,
+    special_quota INT NOT NULL DEFAULT 0,
+    target_quota INT NOT NULL DEFAULT 0,
+    separate_quota INT NOT NULL DEFAULT 0,
+    annual_tuition_fee INT NOT NULL DEFAULT 0
 );
 
-CREATE TABLE "абитуриенты" (
-    "id" SERIAL PRIMARY KEY,
-    "снилс" VARCHAR(14) NOT NULL UNIQUE,
-    "фио" VARCHAR(255) NOT NULL,
-    "дата_рождения" DATE NOT NULL,
-    "паспорт_серия_номер" VARCHAR(20) NOT NULL,
-    "тип_документа_образования" VARCHAR(100) NOT NULL,
-    "год_выдачи_документа" INT NOT NULL,
-    "учебное_заведение" VARCHAR(255) NOT NULL
+CREATE TABLE applicants (
+    id SERIAL PRIMARY KEY,
+    snils VARCHAR(14) NOT NULL UNIQUE,
+    full_name VARCHAR(255) NOT NULL,
+    birth_date DATE NOT NULL,
+    passport_number VARCHAR(20) NOT NULL,
+    education_doc_type VARCHAR(100) NOT NULL,
+    doc_issue_year INT NOT NULL,
+    school_name VARCHAR(255) NOT NULL
 );
 
-CREATE TABLE "заявления" (
-    "id" SERIAL PRIMARY KEY,
-    "номер_заявления" VARCHAR(64) NOT NULL UNIQUE,
-    "абитуриент_id" INT NOT NULL REFERENCES "абитуриенты"("id") ON DELETE CASCADE,
-    "направление_id" INT NOT NULL REFERENCES "направления"("id") ON DELETE CASCADE,
-    "год_кампании" INT NOT NULL,
-    "приоритет" INT NOT NULL,
-    "форма_обучения" VARCHAR(50) NOT NULL,
-    "основание_поступления" VARCHAR(100) NOT NULL,
-    "вид_квоты" VARCHAR(100) NOT NULL DEFAULT 'Без квот',
-    "балл_русский_язык" INT NOT NULL,
-    "балл_математика" INT NOT NULL,
-    "предмет_по_выбору" VARCHAR(100) NOT NULL,
-    "балл_предмет_по_выбору" INT NOT NULL,
-    "балл_дви" INT NOT NULL DEFAULT 0,
-    "баллы_индивидуальных_достижений" INT NOT NULL DEFAULT 0,
-    "вид_индивидуального_достижения" VARCHAR(200) NOT NULL DEFAULT 'Нет',
-    "сумма_баллов" INT NOT NULL,
-    "подан_оригинал" BOOLEAN NOT NULL DEFAULT FALSE,
-    "подано_согласие" BOOLEAN NOT NULL DEFAULT FALSE,
-    "статус" VARCHAR(100) NOT NULL,
-    "номер_приказа_зачисления" VARCHAR(100),
-    "дата_приказа" DATE,
-    "дата_подачи" DATE NOT NULL
+CREATE TABLE applications (
+    id SERIAL PRIMARY KEY,
+    application_number VARCHAR(64) NOT NULL UNIQUE,
+    applicant_id INT NOT NULL REFERENCES applicants(id) ON DELETE CASCADE,
+    program_id INT NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+    campaign_year INT NOT NULL,
+    priority INT NOT NULL,
+    study_form VARCHAR(50) NOT NULL,
+    admission_basis VARCHAR(100) NOT NULL,
+    quota_type VARCHAR(100) NOT NULL DEFAULT 'Без квот',
+    score_russian INT NOT NULL,
+    score_math INT NOT NULL,
+    elective_subject VARCHAR(100) NOT NULL,
+    score_elective INT NOT NULL,
+    score_dvi INT NOT NULL DEFAULT 0,
+    score_achievements INT NOT NULL DEFAULT 0,
+    achievement_type VARCHAR(200) NOT NULL DEFAULT 'Нет',
+    total_score INT NOT NULL,
+    is_original_submitted BOOLEAN NOT NULL DEFAULT FALSE,
+    is_consent_submitted BOOLEAN NOT NULL DEFAULT FALSE,
+    status VARCHAR(100) NOT NULL,
+    enrollment_order_number VARCHAR(100),
+    enrollment_order_date DATE,
+    submission_date DATE NOT NULL
 );
 
-CREATE TABLE "студенты" (
-    "id" SERIAL PRIMARY KEY,
-    "направление_id" INT NOT NULL REFERENCES "направления"("id") ON DELETE CASCADE,
-    "номер_студбилета" VARCHAR(64) NOT NULL UNIQUE,
-    "учебная_группа" VARCHAR(50) NOT NULL,
-    "курс" INT NOT NULL,
-    "год_поступления" INT NOT NULL,
-    "основание_обучения" VARCHAR(50) NOT NULL,
-    "статус_студента" VARCHAR(50) NOT NULL
+CREATE TABLE students (
+    id SERIAL PRIMARY KEY,
+    program_id INT NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+    student_card_number VARCHAR(64) NOT NULL UNIQUE,
+    study_group VARCHAR(50) NOT NULL,
+    study_year INT NOT NULL,
+    admission_year INT NOT NULL,
+    education_basis VARCHAR(50) NOT NULL,
+    student_status VARCHAR(50) NOT NULL
 );
 
-CREATE TABLE "аудитории" (
-    "id" SERIAL PRIMARY KEY,
-    "корпус" VARCHAR(50) NOT NULL,
-    "номер_аудитории" VARCHAR(20) NOT NULL,
-    "вместимость" INT NOT NULL,
-    "тип_аудитории" VARCHAR(50) NOT NULL
+CREATE TABLE classrooms (
+    id SERIAL PRIMARY KEY,
+    building VARCHAR(50) NOT NULL,
+    room_number VARCHAR(20) NOT NULL,
+    capacity INT NOT NULL,
+    room_type VARCHAR(50) NOT NULL
 );
 
-CREATE TABLE "дисциплины" (
-    "id" SERIAL PRIMARY KEY,
-    "кафедра_id" INT NOT NULL REFERENCES "кафедры"("id") ON DELETE CASCADE,
-    "преподаватель_id" INT NOT NULL REFERENCES "преподаватели"("id") ON DELETE CASCADE,
-    "название" VARCHAR(255) NOT NULL,
-    "семестр" INT NOT NULL,
-    "академические_часы" INT NOT NULL,
-    "форма_контроля" VARCHAR(50) NOT NULL
+CREATE TABLE disciplines (
+    id SERIAL PRIMARY KEY,
+    department_id INT NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+    teacher_id INT NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    semester INT NOT NULL,
+    academic_hours INT NOT NULL,
+    control_form VARCHAR(50) NOT NULL
 );
 
-CREATE TABLE "оценки" (
-    "id" SERIAL PRIMARY KEY,
-    "студент_id" INT NOT NULL REFERENCES "студенты"("id") ON DELETE CASCADE,
-    "дисциплина_id" INT NOT NULL REFERENCES "дисциплины"("id") ON DELETE CASCADE,
-    "семестр" INT NOT NULL,
-    "баллы" INT NOT NULL,
-    "оценка" VARCHAR(20) NOT NULL,
-    "академическая_задолженность" BOOLEAN NOT NULL DEFAULT FALSE,
-    "дата_экзамена" DATE NOT NULL
+CREATE TABLE grades (
+    id SERIAL PRIMARY KEY,
+    student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    discipline_id INT NOT NULL REFERENCES disciplines(id) ON DELETE CASCADE,
+    semester INT NOT NULL,
+    points INT NOT NULL,
+    grade VARCHAR(20) NOT NULL,
+    has_academic_debt BOOLEAN NOT NULL DEFAULT FALSE,
+    exam_date DATE NOT NULL
 );
 
-CREATE TABLE "расписание" (
-    "id" SERIAL PRIMARY KEY,
-    "аудитория_id" INT NOT NULL REFERENCES "аудитории"("id") ON DELETE CASCADE,
-    "дисциплина_id" INT NOT NULL REFERENCES "дисциплины"("id") ON DELETE CASCADE,
-    "день_недели" INT NOT NULL,
-    "временной_слот" VARCHAR(50) NOT NULL,
-    "учебная_группа" VARCHAR(50) NOT NULL,
-    "количество_слушателей" INT NOT NULL
+CREATE TABLE schedules (
+    id SERIAL PRIMARY KEY,
+    classroom_id INT NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
+    discipline_id INT NOT NULL REFERENCES disciplines(id) ON DELETE CASCADE,
+    day_of_week INT NOT NULL,
+    time_slot VARCHAR(50) NOT NULL,
+    study_group VARCHAR(50) NOT NULL,
+    attendees_count INT NOT NULL
 );
 """
 
@@ -217,7 +217,7 @@ async def seed():
     faculty_ids = []
     for f in faculties_data:
         fid = await conn.fetchval(
-            'INSERT INTO "факультеты" ("название", "сокращение", "декан_фио", "корпус", "электронная_почта") VALUES ($1, $2, $3, $4, $5) RETURNING id',
+            'INSERT INTO faculties (name, short_name, dean_full_name, building, email) VALUES ($1, $2, $3, $4, $5) RETURNING id',
             *f
         )
         faculty_ids.append(fid)
@@ -249,7 +249,7 @@ async def seed():
     department_ids = []
     for d in departments_data:
         did = await conn.fetchval(
-            'INSERT INTO "кафедры" ("факультет_id", "название", "заведующий_фио") VALUES ($1, $2, $3) RETURNING id',
+            'INSERT INTO departments (faculty_id, name, head_full_name) VALUES ($1, $2, $3) RETURNING id',
             *d
         )
         department_ids.append(did)
@@ -264,7 +264,7 @@ async def seed():
             t_name = generate_full_name()
             email = f"t.{random.randint(1000, 9999)}@rea.ru"
             tid = await conn.fetchval(
-                """INSERT INTO "преподаватели" ("кафедра_id", "фио", "ученая_степень", "ученое_звание", "должность", "электронная_почта")
+                """INSERT INTO teachers (department_id, full_name, academic_degree, academic_title, position, email)
                    VALUES ($1, $2, $3, $4, $5, $6) RETURNING id""",
                 dept_id, t_name, random.choice(degrees), random.choice(titles), random.choice(positions), email
             )
@@ -301,7 +301,7 @@ async def seed():
     program_ids = []
     for p in programs_data:
         pid = await conn.fetchval(
-            """INSERT INTO "направления" ("факультет_id", "код_направления", "название", "уровень_образования", "бюджетные_места", "платные_места", "квота_особая", "квота_целевая", "квота_отдельная", "стоимость_обучения_год")
+            """INSERT INTO programs (faculty_id, program_code, name, education_level, budget_places, commercial_places, special_quota, target_quota, separate_quota, annual_tuition_fee)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id""",
             *p
         )
@@ -320,7 +320,7 @@ async def seed():
         school = random.choice(SCHOOLS)
         
         aid = await conn.fetchval(
-            """INSERT INTO "абитуриенты" ("снилс", "фио", "дата_рождения", "паспорт_серия_номер", "тип_документа_образования", "год_выдачи_документа", "учебное_заведение")
+            """INSERT INTO applicants (snils, full_name, birth_date, passport_number, education_doc_type, doc_issue_year, school_name)
                VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id""",
             snils, fio, b_date, passport, doc_type, grad_year, school
         )
@@ -376,19 +376,18 @@ async def seed():
             ))
 
     await conn.executemany(
-        """INSERT INTO "заявления" (
-            "номер_заявления", "абитуриент_id", "направление_id", "год_кампании", "приоритет",
-            "форма_обучения", "основание_поступления", "вид_квоты", "балл_русский_язык",
-            "балл_математика", "предмет_по_выбору", "балл_предмет_по_выбору", "балл_дви",
-            "баллы_индивидуальных_достижений", "вид_индивидуального_достижения", "сумма_баллов",
-            "подан_оригинал", "подано_согласие", "статус", "номер_приказа_зачисления",
-            "дата_приказа", "дата_подачи"
+        """INSERT INTO applications (
+            application_number, applicant_id, program_id, campaign_year, priority,
+            study_form, admission_basis, quota_type, score_russian,
+            score_math, elective_subject, score_elective, score_dvi,
+            score_achievements, achievement_type, total_score,
+            is_original_submitted, is_consent_submitted, status, enrollment_order_number,
+            enrollment_order_date, submission_date
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)""",
         app_records
     )
 
     print("Генерация 600 студентов...")
-    student_records = []
     group_prefixes = ["ПИ-", "ИВТ-", "ПМИ-", "ЭК-", "МЕН-", "ФИН-", "ЮР-", "СОЦ-", "РЕК-", "ТАМ-", "ФОР-", "МЕД-", "ИНТ-"]
     student_ids_list = []
 
@@ -402,7 +401,7 @@ async def seed():
         status = "Отчислен" if random.random() < 0.05 else ("В академическом отпуске" if random.random() < 0.03 else "Обучается")
 
         sid = await conn.fetchval(
-            """INSERT INTO "студенты" ("направление_id", "номер_студбилета", "учебная_группа", "курс", "год_поступления", "основание_обучения", "статус_студента")
+            """INSERT INTO students (program_id, student_card_number, study_group, study_year, admission_year, education_basis, student_status)
                VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id""",
             prog_id, ticket_num, study_grp, course_num, enroll_year, basis, status
         )
@@ -419,7 +418,7 @@ async def seed():
     classroom_ids = []
     for c in classrooms_data:
         cid = await conn.fetchval(
-            'INSERT INTO "аудитории" ("корпус", "номер_аудитории", "вместимость", "тип_аудитории") VALUES ($1, $2, $3, $4) RETURNING id',
+            'INSERT INTO classrooms (building, room_number, capacity, room_type) VALUES ($1, $2, $3, $4) RETURNING id',
             *c
         )
         classroom_ids.append(cid)
@@ -439,7 +438,7 @@ async def seed():
         tid, dept_id = random.choice(teacher_ids)
         sem = (i % 8) + 1
         cid = await conn.fetchval(
-            """INSERT INTO "дисциплины" ("кафедра_id", "преподаватель_id", "название", "семестр", "академические_часы", "форма_контроля")
+            """INSERT INTO disciplines (department_id, teacher_id, name, semester, academic_hours, control_form)
                VALUES ($1, $2, $3, $4, $5, $6) RETURNING id""",
             dept_id, tid, c_name, sem, random.choice([72, 108, 144]), random.choice(["Экзамен", "Зачет", "Дифференцированный зачет"])
         )
@@ -461,7 +460,7 @@ async def seed():
             ))
 
     await conn.executemany(
-        """INSERT INTO "оценки" ("студент_id", "дисциплина_id", "семестр", "баллы", "оценка", "академическая_задолженность", "дата_экзамена")
+        """INSERT INTO grades (student_id, discipline_id, semester, points, grade, has_academic_debt, exam_date)
            VALUES ($1, $2, $3, $4, $5, $6, $7)""",
         grades_records
     )
@@ -479,23 +478,23 @@ async def seed():
         schedule_records.append((cl_id, cid, day, slot, grp, attendees))
 
     await conn.executemany(
-        """INSERT INTO "расписание" ("аудитория_id", "дисциплина_id", "день_недели", "временной_слот", "учебная_группа", "количество_слушателей")
+        """INSERT INTO schedules (classroom_id, discipline_id, day_of_week, time_slot, study_group, attendees_count)
            VALUES ($1, $2, $3, $4, $5, $6)""",
         schedule_records
     )
 
     counts = {
-        "факультеты": await conn.fetchval('SELECT count(*) FROM "факультеты"'),
-        "кафедры": await conn.fetchval('SELECT count(*) FROM "кафедры"'),
-        "преподаватели": await conn.fetchval('SELECT count(*) FROM "преподаватели"'),
-        "направления": await conn.fetchval('SELECT count(*) FROM "направления"'),
-        "абитуриенты": await conn.fetchval('SELECT count(*) FROM "абитуриенты"'),
-        "заявления": await conn.fetchval('SELECT count(*) FROM "заявления"'),
-        "студенты": await conn.fetchval('SELECT count(*) FROM "студенты"'),
-        "аудитории": await conn.fetchval('SELECT count(*) FROM "аудитории"'),
-        "дисциплины": await conn.fetchval('SELECT count(*) FROM "дисциплины"'),
-        "оценки": await conn.fetchval('SELECT count(*) FROM "оценки"'),
-        "расписание": await conn.fetchval('SELECT count(*) FROM "расписание"')
+        "faculties": await conn.fetchval('SELECT count(*) FROM faculties'),
+        "departments": await conn.fetchval('SELECT count(*) FROM departments'),
+        "teachers": await conn.fetchval('SELECT count(*) FROM teachers'),
+        "programs": await conn.fetchval('SELECT count(*) FROM programs'),
+        "applicants": await conn.fetchval('SELECT count(*) FROM applicants'),
+        "applications": await conn.fetchval('SELECT count(*) FROM applications'),
+        "students": await conn.fetchval('SELECT count(*) FROM students'),
+        "classrooms": await conn.fetchval('SELECT count(*) FROM classrooms'),
+        "disciplines": await conn.fetchval('SELECT count(*) FROM disciplines'),
+        "grades": await conn.fetchval('SELECT count(*) FROM grades'),
+        "schedules": await conn.fetchval('SELECT count(*) FROM schedules')
     }
 
     total_rows = sum(counts.values())

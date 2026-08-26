@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import html
 import httpx
 from typing import Any, Dict
 from dotenv import load_dotenv
@@ -13,41 +14,50 @@ YANDEX_API_URL = "https://llm.api.cloud.yandex.net/foundationModels/v1/completio
 
 SYSTEM_PROMPT = """
 Ты — AI-ассистент базы данных PostgreSQL РЭУ им. Г. В. Плеханова.
-Твоя задача: преобразовывать вопросы на русском языке в валидный SQL-запрос (PostgreSQL dialect) и формировать блок Explainable AI.
+Генерируй точный SQL-запрос (PostgreSQL dialect) и формируй структурированный блок Explainable AI.
 
-СХЕМА БАЗЫ ДАННЫХ:
-1. "факультеты" ("id", "название", "сокращение", "декан_фио", "корпус", "электронная_почта")
-2. "кафедры" ("id", "факультет_id", "название", "заведующий_фио")
-3. "преподаватели" ("id", "кафедра_id", "фио", "ученая_степень", "ученое_звание", "должность", "электронная_почта")
-4. "направления" ("id", "факультет_id", "код_направления", "название", "уровень_образования", "бюджетные_места", "платные_места", "квота_особая", "квота_целевая", "квота_отдельная", "стоимость_обучения_год")
-5. "абитуриенты" ("id", "снилс", "фио", "дата_рождения", "паспорт_серия_номер", "тип_документа_образования", "год_выдачи_документа", "учебное_заведение")
-6. "заявления" ("id", "номер_заявления", "абитуриент_id", "направление_id", "год_кампании", "приоритет", "форма_обучения", "основание_поступления", "вид_квоты", "балл_русский_язык", "балл_математика", "предмет_по_выбору", "балл_предмет_по_выбору", "балл_дви", "баллы_индивидуальных_достижений", "вид_индивидуального_достижения", "сумма_баллов", "подан_оригинал", "подано_согласие", "статус", "номер_приказа_зачисления", "дата_приказа", "дата_подачи")
-7. "студенты" ("id", "направление_id", "номер_студбилета", "учебная_группа", "курс", "год_поступления", "основание_обучения", "статус_студента")
-8. "аудитории" ("id", "корпус", "номер_аудитории", "вместимость", "тип_аудитории")
-9. "дисциплины" ("id", "кафедра_id", "преподаватель_id", "название", "семестр", "академические_часы", "форма_контроля")
-10. "оценки" ("id", "студент_id", "дисциплина_id", "семестр", "баллы", "оценка", "академическая_задолженность", "дата_экзамена")
-11. "расписание" ("id", "аудитория_id", "дисциплина_id", "день_недели", "временной_слот", "учебная_группа", "количество_слушателей")
+АКТУАЛЬНАЯ СХЕМА БАЗЫ ДАННЫХ:
+1. faculties (id, name, short_name, dean_full_name, building, email)
+2. departments (id, faculty_id, name, head_full_name)
+3. teachers (id, department_id, full_name, academic_degree, academic_title, position, email)
+4. programs (id, faculty_id, program_code, name, education_level, budget_places, commercial_places, special_quota, target_quota, separate_quota, annual_tuition_fee)
+5. applicants (id, snils, full_name, birth_date, passport_number, education_doc_type, doc_issue_year, school_name)
+6. applications (id, application_number, applicant_id, program_id, campaign_year, priority, study_form, admission_basis, quota_type, score_russian, score_math, elective_subject, score_elective, score_dvi, score_achievements, achievement_type, total_score, is_original_submitted, is_consent_submitted, status, enrollment_order_number, enrollment_order_date, submission_date)
+7. students (id, program_id, student_card_number, study_group, study_year, admission_year, education_basis, student_status)
+8. classrooms (id, building, room_number, capacity, room_type)
+9. disciplines (id, department_id, teacher_id, name, semester, academic_hours, control_form)
+10. grades (id, student_id, discipline_id, semester, points, grade, has_academic_debt, exam_date)
+11. schedules (id, classroom_id, discipline_id, day_of_week, time_slot, study_group, attendees_count)
 
-ПРАВИЛА ОБРАБОТКИ ЗАПРОСОВ:
-1. Используй только таблицы из приведенной схемы. Придумывать новые таблицы строго запрещено.
-2. Если вопрос не относится к структуре университета (например: приветствия, случайные слова, темы вне базы данных), возвращай "sql": null и вежливое пояснение в "summary_ru".
-3. Все имена таблиц и колонок оборачивай в двойные кавычки (например: SELECT "название" FROM "кафедры").
-4. Персональные данные абитуриентов и студентов выводи только в агрегированном виде (COUNT, AVG).
+ПРАВИЛА БЕЗОПАСНОСТИ И ПЕРСОНАЛЬНЫХ ДАННЫХ:
+1. РАЗРЕШЕНО выводить ФИО преподавателей (teachers.full_name), заведующих кафедрами (departments.head_full_name), деканов (faculties.dean_full_name).
+2. СТРОГО ЗАПРЕЩЕНО извлекать поля passport_number, snils, birth_date, applicants.full_name.
+3. По студентам и абитуриентам выводятся только агрегированные показатели (COUNT, AVG, MAX, MIN) или обезличенные данные (application_number, student_card_number, study_group, баллы).
+4. Используй правильные JOIN-связи через первичные и внешние ключи.
 
 ФОРМАТ ОТВЕТА (СТРОГО JSON):
 {
-  "sql": "SELECT ... или null",
+  "sql": "SELECT ...",
   "explanation": {
-    "tables": ["список таблиц"],
-    "joins": ["описание связей"],
-    "filters": ["условия WHERE"],
-    "aggregations": ["примененные агрегаты"]
+    "tables": ["список задействованных таблиц"],
+    "joins": ["описание связей между таблицами"],
+    "filters": ["условия фильтрации WHERE"],
+    "aggregations": ["примененные функции агрегации"],
+    "limit": "значение ограничения строк"
   },
-  "summary_ru": "Ответ пользователю или пояснение сути запроса."
+  "summary_ru": "Понятное объяснение на русском языке, что возвращает этот запрос."
 }
 """
 
+def sanitize_user_input(text: str) -> str:
+    cleaned = text.strip()
+    cleaned = html.escape(cleaned)
+    cleaned = re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", "", cleaned)
+    return cleaned[:400]
+
 async def generate_sql_and_explanation(user_question: str) -> Dict[str, Any]:
+    safe_question = sanitize_user_input(user_question)
+    
     headers = {
         "Authorization": f"Api-Key {YANDEX_API_KEY}",
         "Content-Type": "application/json"
@@ -62,7 +72,7 @@ async def generate_sql_and_explanation(user_question: str) -> Dict[str, Any]:
         },
         "messages": [
             {"role": "system", "text": SYSTEM_PROMPT},
-            {"role": "user", "text": user_question}
+            {"role": "user", "text": safe_question}
         ]
     }
     
@@ -78,3 +88,33 @@ async def generate_sql_and_explanation(user_question: str) -> Dict[str, Any]:
         return json.loads(json_match.group(0))
     
     return json.loads(cleaned_text)
+
+async def ask_yandex_gpt_analytics(logs_context: str) -> str:
+    headers = {
+        "Authorization": f"Api-Key {YANDEX_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    prompt = f"""
+    Проанализируй список последних пользовательских запросов к базе данных университета:
+    {logs_context}
+    
+    Сформируй краткую аналитическую сводку (3-4 предложения):
+    1. Какие темы больше всего интересуют пользователей (абитуриенты, оценки, кафедры, преподаватели).
+    2. Были ли зафиксированы попытки вредоносных запросов.
+    3. Рекомендация руководству по оптимизации данных.
+    """
+    
+    payload = {
+        "modelUri": f"gpt://{YANDEX_FOLDER_ID}/yandexgpt/latest",
+        "completionOptions": {"stream": False, "temperature": 0.2, "maxTokens": "1000"},
+        "messages": [{"role": "user", "text": prompt}]
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(YANDEX_API_URL, headers=headers, json=payload)
+            response.raise_for_status()
+            return response.json()["result"]["alternatives"][0]["message"]["text"]
+    except Exception as e:
+        return "Аналитика временно недоступна."
