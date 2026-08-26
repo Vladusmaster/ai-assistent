@@ -14,6 +14,7 @@ DB_USER = os.getenv("DB_USER", "vdb5_user").strip()
 DB_PASSWORD = os.getenv("DB_PASSWORD", "X59b39C9-5D4X4NHn").strip()
 
 DDL_SCHEMA = """
+DROP TABLE IF EXISTS query_logs CASCADE;
 DROP TABLE IF EXISTS schedules CASCADE;
 DROP TABLE IF EXISTS grades CASCADE;
 DROP TABLE IF EXISTS disciplines CASCADE;
@@ -106,6 +107,7 @@ CREATE TABLE applications (
 CREATE TABLE students (
     id SERIAL PRIMARY KEY,
     program_id INT NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+    full_name VARCHAR(255) NOT NULL,
     student_card_number VARCHAR(64) NOT NULL UNIQUE,
     study_group VARCHAR(50) NOT NULL,
     study_year INT NOT NULL,
@@ -189,7 +191,7 @@ def generate_snils(idx: int) -> str:
     return f"{p1:03d}-{p2:03d}-{p3:03d} {chk:02d}"
 
 async def seed():
-    print(f"Подключение к базе данных {DB_NAME} на {DB_HOST}:{DB_PORT}...")
+    print(f"Подключение к базе данных {DB_NAME}...")
     conn = await asyncpg.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -387,12 +389,13 @@ async def seed():
         app_records
     )
 
-    print("Генерация 600 студентов...")
+    print("Генерация 600 студентов с ФИО...")
     group_prefixes = ["ПИ-", "ИВТ-", "ПМИ-", "ЭК-", "МЕН-", "ФИН-", "ЮР-", "СОЦ-", "РЕК-", "ТАМ-", "ФОР-", "МЕД-", "ИНТ-"]
-    student_ids_list = []
+    student_records = []
 
     for i in range(1, 601):
         prog_id = random.choice(program_ids)
+        st_name = generate_full_name()
         enroll_year = random.choice([2022, 2023, 2024, 2025])
         course_num = min(2026 - enroll_year + 1, 4)
         study_grp = f"{random.choice(group_prefixes)}{enroll_year % 100}{random.randint(1, 3)}"
@@ -400,12 +403,15 @@ async def seed():
         basis = random.choice(["Бюджетная основа", "Договорная основа"])
         status = "Отчислен" if random.random() < 0.05 else ("В академическом отпуске" if random.random() < 0.03 else "Обучается")
 
-        sid = await conn.fetchval(
-            """INSERT INTO students (program_id, student_card_number, study_group, study_year, admission_year, education_basis, student_status)
-               VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id""",
-            prog_id, ticket_num, study_grp, course_num, enroll_year, basis, status
-        )
-        student_ids_list.append((sid, course_num, status))
+        student_records.append((
+            prog_id, st_name, ticket_num, study_grp, course_num, enroll_year, basis, status
+        ))
+
+    await conn.executemany(
+        """INSERT INTO students (program_id, full_name, student_card_number, study_group, study_year, admission_year, education_basis, student_status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)""",
+        student_records
+    )
 
     classrooms_data = []
     buildings_list = ["Корпус 1", "Корпус 2", "Корпус 3", "Корпус 6", "Корпус 8", "Корпус 9"]
@@ -446,8 +452,8 @@ async def seed():
 
     print("Генерация 1800 экзаменационных оценок...")
     grades_records = []
-    active_students = [s for s in student_ids_list if s[2] == "Обучается"]
-    for sid, c_year, _ in active_students:
+    student_ids_list = await conn.fetch("SELECT id, student_status FROM students WHERE student_status = 'Обучается'")
+    for srow in student_ids_list:
         assigned_courses = random.sample(course_ids, k=min(4, len(course_ids)))
         for cid, sem in assigned_courses:
             pts = random.randint(35, 98)
@@ -456,7 +462,7 @@ async def seed():
             exam_d = date(2026, 1, 15) if sem % 2 == 1 else date(2025, 6, 20)
 
             grades_records.append((
-                sid, cid, sem, pts, letter, is_debt, exam_d
+                srow["id"], cid, sem, pts, letter, is_debt, exam_d
             ))
 
     await conn.executemany(
@@ -483,27 +489,8 @@ async def seed():
         schedule_records
     )
 
-    counts = {
-        "faculties": await conn.fetchval('SELECT count(*) FROM faculties'),
-        "departments": await conn.fetchval('SELECT count(*) FROM departments'),
-        "teachers": await conn.fetchval('SELECT count(*) FROM teachers'),
-        "programs": await conn.fetchval('SELECT count(*) FROM programs'),
-        "applicants": await conn.fetchval('SELECT count(*) FROM applicants'),
-        "applications": await conn.fetchval('SELECT count(*) FROM applications'),
-        "students": await conn.fetchval('SELECT count(*) FROM students'),
-        "classrooms": await conn.fetchval('SELECT count(*) FROM classrooms'),
-        "disciplines": await conn.fetchval('SELECT count(*) FROM disciplines'),
-        "grades": await conn.fetchval('SELECT count(*) FROM grades'),
-        "schedules": await conn.fetchval('SELECT count(*) FROM schedules')
-    }
-
-    total_rows = sum(counts.values())
     await conn.close()
-    
-    print("\n--- Итог заполнения базы данных ---")
-    for tbl, cnt in counts.items():
-        print(f"  {tbl}: {cnt}")
-    print(f"Всего строк в БД: {total_rows}")
+    print("Заполнение базы данных успешно завершено.")
 
 if __name__ == "__main__":
     asyncio.run(seed())

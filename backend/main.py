@@ -56,6 +56,7 @@ app.add_middleware(
 
 class QueryRequest(BaseModel):
     question: str
+    role: str = "applicant"
 
 async def analyze_query_volume(base_sql: str) -> tuple[int, str | None, list[str]]:
     if not base_sql or base_sql == "—":
@@ -104,12 +105,12 @@ async def analyze_query_volume(base_sql: str) -> tuple[int, str | None, list[str
 @app.post("/api/ask")
 async def ask_question(req: QueryRequest):
     start_time = time.perf_counter()
-    logging.info(f"Получен вопрос: {req.question}")
+    logging.info(f"Получен вопрос ({req.role}): {req.question}")
     
     try:
         check_prompt_security_intent(req.question)
 
-        llm_response = await generate_sql_and_explanation(req.question)
+        llm_response = await generate_sql_and_explanation(req.question, role=req.role)
         raw_sql = llm_response.get("sql", "").strip()
         explanation = llm_response.get("explanation", {})
         summary_ru = llm_response.get("summary_ru", "")
@@ -123,13 +124,13 @@ async def ask_question(req: QueryRequest):
                 "message": summary_ru or "Запрос не распознан. Пожалуйста, сформулируйте вопрос о данных университета."
             }
         
-        safe_sql = validate_and_sanitize_sql(raw_sql, default_limit=100)
+        safe_sql = validate_and_sanitize_sql(raw_sql, role=req.role, default_limit=100)
         
         try:
             columns, rows = await execute_safe_query(safe_sql)
         except asyncpg.PostgresError as pe:
             logging.warning(f"Ошибка выполнения SQL ({pe.message}). Запуск Self-Correction...")
-            fixed_response = await fix_sql_with_error(req.question, safe_sql, pe.message)
+            fixed_response = await fix_sql_with_error(req.question, safe_sql, pe.message, role=req.role)
             raw_sql = fixed_response.get("sql", "").strip()
             
             if not raw_sql:
@@ -141,7 +142,7 @@ async def ask_question(req: QueryRequest):
                 
             explanation = fixed_response.get("explanation", {})
             summary_ru = fixed_response.get("summary_ru", "")
-            safe_sql = validate_and_sanitize_sql(raw_sql, default_limit=100)
+            safe_sql = validate_and_sanitize_sql(raw_sql, role=req.role, default_limit=100)
             columns, rows = await execute_safe_query(safe_sql)
             
         total_found, warning, suggested_filters = await analyze_query_volume(safe_sql)
@@ -176,7 +177,7 @@ async def ask_question(req: QueryRequest):
         return {
             "status": "info",
             "type": "unrecognized_query",
-            "message": "По данному запросу не удалось сопоставить сущности. Уточните вопрос (например: кафедры, аудитории, заявления 2026)."
+            "message": "По данному запросу не удалось сопоставить сущности. Уточните вопрос."
         }
     except asyncpg.PostgresError as pe:
         execution_time = (time.perf_counter() - start_time) * 1000

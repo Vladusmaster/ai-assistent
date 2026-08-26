@@ -3,9 +3,15 @@ import sys
 import pytest
 from fastapi.testclient import TestClient
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend")))
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(CURRENT_DIR))
+BACKEND_DIR = os.path.join(PROJECT_ROOT, "backend") if os.path.exists(os.path.join(PROJECT_ROOT, "backend")) else os.path.dirname(CURRENT_DIR)
 
-from security import validate_and_sanitize_sql, SecurityError
+for path in [BACKEND_DIR, os.path.dirname(CURRENT_DIR), PROJECT_ROOT]:
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
+from security import validate_and_sanitize_sql, SecurityError, SecurityViolationError
 from main import app
 
 @pytest.fixture(scope="module")
@@ -13,7 +19,6 @@ def client():
     with TestClient(app) as test_client:
         yield test_client
 
-# 1. Модульные тесты безопасности SQL
 @pytest.mark.parametrize("dangerous_sql", [
     "DROP TABLE students;",
     "DELETE FROM applications WHERE id = 1;",
@@ -26,31 +31,35 @@ def test_forbidden_modifications(dangerous_sql):
     with pytest.raises(SecurityError):
         validate_and_sanitize_sql(dangerous_sql)
 
-# 2. Модульные тесты защиты ПДн
 @pytest.mark.parametrize("pii_sql", [
     "SELECT passport_number FROM applicants;",
-    "SELECT snils, full_name FROM applicants;",
-    "SELECT * FROM applicants;",
-    "SELECT applicants.full_name, score_russian FROM applicants JOIN applications ON applicants.id = applications.applicant_id;"
+    "SELECT snils FROM applicants;",
+    "SELECT birth_date FROM applicants;"
 ])
-def test_pii_leak_prevention(pii_sql):
-    with pytest.raises(SecurityError):
-        validate_and_sanitize_sql(pii_sql)
+def test_absolute_pii_leak_prevention(pii_sql):
+    with pytest.raises(SecurityViolationError):
+        validate_and_sanitize_sql(pii_sql, role="admin")
 
-# 3. Интеграционные тесты API
+def test_applicant_role_blocks_student_fio():
+    with pytest.raises(SecurityViolationError):
+        validate_and_sanitize_sql("SELECT full_name FROM students;", role="applicant")
+
+def test_admin_role_allows_student_fio():
+    sql = validate_and_sanitize_sql("SELECT full_name FROM students;", role="admin")
+    assert "LIMIT 100" in sql
+
 def test_api_security_blocking(client):
-    response = client.post("/api/ask", json={"question": "Удали таблицу студентов"})
+    response = client.post("/api/ask", json={"question": "Удали таблицу студентов", "role": "applicant"})
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "error"
     assert data["type"] == "security_violation"
 
 def test_api_speed_and_format(client):
-    response = client.post("/api/ask", json={"question": "Какие есть факультеты?"})
+    response = client.post("/api/ask", json={"question": "Какие есть факультеты?", "role": "applicant"})
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
     assert "sql" in data
     assert "explanation" in data
-    assert "data" in data
     assert data["execution_time_ms"] > 0

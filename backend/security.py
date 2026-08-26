@@ -14,37 +14,39 @@ FORBIDDEN_KEYWORDS = {
     "GRANT", "REVOKE", "CREATE", "EXEC", "EXECUTE", "MERGE", "CALL"
 }
 
-FORBIDDEN_PII_PATTERNS = [
+ABSOLUTE_FORBIDDEN_PII = [
     r"\bpassport(_number)?\b",
     r"\bsnils\b",
-    r"\bbirth_date\b",
-    r"\bapplicants\s*\.\s*full_name\b",
-    r"\bselect\s+\*\s+from\s+applicants\b",
-    r"\bselect\s+.*?\bfull_name\b.*?from\s+applicants\b",
-    r"\bselect\s+.*?\bfull_name\b.*?from\s+.*\bapplicants\b"
+    r"\bbirth_date\b"
 ]
 
-# Проверка деструктивных намерений в естественном тексте запроса
+APPLICANT_RESTRICTED_PATTERNS = [
+    r"\bapplicants\s*\.\s*full_name\b",
+    r"\bstudents\s*\.\s*full_name\b",
+    r"\bselect\s+\*\s+from\s+applicants\b",
+    r"\bselect\s+.*?\bfull_name\b.*?from\s+applicants\b",
+    r"\bselect\s+.*?\bfull_name\b.*?from\s+students\b"
+]
+
+# Расширенный фильтр деструктивных глаголов и модификаций данных
 DANGEROUS_INTENT_PATTERNS = [
-    r"\b(drop|delete|truncate|alter|insert|update)\b",
-    r"\b(удали|удалить|стереть|очисти|дропни|измени|вставь)\b",
+    r"\b(drop|delete|truncate|alter|insert|update|create|grant|revoke)\b",
+    r"\b(удали|удалить|сотри|стереть|очисти|очистить|дропни|дропнуть)\b",
+    r"\b(добавь|добавить|вставь|вставить|создай|создать|запиши|записать)\b",
+    r"\b(обнови|обновить|измени|изменить|поменяй|поменять|исправь|исправить)\b",
     r"\b(паспорт|паспорта|снилс|паспортные)\b"
 ]
 
 class SecurityError(Exception):
-    """Базовое исключение безопасности."""
     pass
 
 class SecurityViolationError(SecurityError):
-    """Настоящая угроза: SQL-инъекция, DDL/DML или попытка кражи ПДн."""
     pass
 
 class UnrecognizedQueryError(SecurityError):
-    """Случайный ввод или опечатка в имени таблицы."""
     pass
 
 def check_prompt_security_intent(user_text: str):
-    """Проверяет прямой текст пользователя на деструктивные команды и попытки взлома."""
     text_lower = user_text.lower()
     for pattern in DANGEROUS_INTENT_PATTERNS:
         if re.search(pattern, text_lower, re.IGNORECASE):
@@ -75,7 +77,7 @@ def extract_tables(sql: str) -> set:
                     from_seen = False
     return tables
 
-def validate_and_sanitize_sql(sql: str, default_limit: int = 100) -> str:
+def validate_and_sanitize_sql(sql: str, role: str = "applicant", default_limit: int = 100) -> str:
     cleaned_sql = sql.strip().rstrip(";")
     if not cleaned_sql:
         return ""
@@ -84,28 +86,37 @@ def validate_and_sanitize_sql(sql: str, default_limit: int = 100) -> str:
     if not parsed:
         raise UnrecognizedQueryError("Не удалось распознать структуру запроса.")
 
-    # 1. Проверка DML/DDL операций
     for statement in parsed:
         for token in statement.tokens:
             if token.ttype in (Keyword, DML) and token.value.upper() in FORBIDDEN_KEYWORDS:
-                raise SecurityViolationError(f"Запрещенная операция модификации данных: {token.value.upper()}")
+                raise SecurityViolationError(f"Запрещенная операция модификации: {token.value.upper()}")
 
-    # 2. Проверка, что запрос начинается строго с SELECT
-    if not cleaned_sql.lower().startswith("select"):
-        raise SecurityViolationError("Разрешены исключительно операции чтения (SELECT).")
+    # Разрешаем запросы, начинающиеся с SELECT или WITH (CTE)
+    sql_start = cleaned_sql.lower()
+    if not (sql_start.startswith("select") or sql_start.startswith("with")):
+        raise SecurityViolationError("Разрешены исключительно операции чтения (SELECT / WITH).")
 
-    # 3. Проверка утечки ПДн
-    for pattern in FORBIDDEN_PII_PATTERNS:
+    for pattern in ABSOLUTE_FORBIDDEN_PII:
         if re.search(pattern, cleaned_sql, re.IGNORECASE):
-            raise SecurityViolationError("Запрос заблокирован: обнаружена попытка извлечения персональных данных абитуриентов.")
+            raise SecurityViolationError("Запрос заблокирован: паспортные данные и СНИЛС защищены политикой конфиденциальности.")
 
-    # 4. Проверка белого списка таблиц
+    # Ролевые ограничения для абитуриента
+    if role in ("applicant", "guest"):
+        for pattern in APPLICANT_RESTRICTED_PATTERNS:
+            if re.search(pattern, cleaned_sql, re.IGNORECASE):
+                raise SecurityViolationError(f"Для роли '{role}' вывод персональных данных обучающихся запрещен.")
+
+        # Блокировка сырых оценок студентов (без агрегации)
+        if "grades" in cleaned_sql.lower():
+            has_aggregate = any(fn in cleaned_sql.upper() for fn in ("COUNT(", "AVG(", "SUM(", "MIN(", "MAX("))
+            if not has_aggregate:
+                raise SecurityViolationError("Для роли 'Абитуриент' доступ к журналу оценок разрешен только в агрегированном виде (средний балл, статистика).")
+
     used_tables = extract_tables(cleaned_sql)
     invalid_tables = used_tables - ALLOWED_TABLES
     if invalid_tables:
         raise UnrecognizedQueryError(f"Сущности '{', '.join(invalid_tables)}' не найдены в базе данных университета.")
 
-    # 5. Автоматический LIMIT
     if not re.search(r"\bLIMIT\s+\d+\b", cleaned_sql, re.IGNORECASE):
         cleaned_sql = f"{cleaned_sql} LIMIT {default_limit}"
 

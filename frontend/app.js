@@ -3,9 +3,24 @@ const chatHistory = document.getElementById('chatHistory');
 const userInput = document.getElementById('userInput');
 const loader = document.getElementById('loader');
 const sendBtn = document.getElementById('sendBtn');
+const userRoleSelect = document.getElementById('userRoleSelect');
 
 window.tableStorage = window.tableStorage || new Map();
 const PAGE_SIZE = 10;
+
+function getSelectedRole() {
+    return userRoleSelect ? userRoleSelect.value : 'applicant';
+}
+
+function onRoleChange() {
+    const roleName = userRoleSelect.options[userRoleSelect.selectedIndex].text;
+    appendBotHtml(`
+        <div class="warning-banner" style="background: #f0fdf4; border-color: #bbf7d0; border-left-color: #17d97b;">
+            <div class="warning-header" style="color: #166534;">🔄 Режим доступа изменен:</div>
+            <div style="font-size: 13px; color: #14532d;">Вы переключились на роль <b>${escapeHtml(roleName)}</b>. Политики фильтрации и видимости ПДн обновлены.</div>
+        </div>
+    `);
+}
 
 function toggleChat(forceState) {
     const isVisible = chatOverlay.style.display === 'flex';
@@ -153,7 +168,10 @@ async function sendMessage() {
         const response = await fetch('/api/ask', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question: text })
+            body: JSON.stringify({
+                question: text,
+                role: getSelectedRole()
+            })
         });
 
         if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
@@ -300,4 +318,4 @@ function renderBotResponse(data) {
     }
 
     appendBotHtml(html);
-}
+}   
