@@ -1,12 +1,9 @@
-# ==============================================================================
-# ФАЙЛ: backend/llm.py (ЗАМЕНИТЬ ПОЛНОСТЬЮ)
-# ==============================================================================
-
 import json
 import os
 import re
 import html
 import httpx
+from datetime import date
 from typing import Any, Dict
 from dotenv import load_dotenv
 
@@ -16,34 +13,42 @@ YANDEX_API_KEY = os.getenv("YANDEX_API_KEY", "").strip()
 YANDEX_FOLDER_ID = os.getenv("YANDEX_FOLDER_ID", "").strip()
 YANDEX_API_URL = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
 
-SYSTEM_PROMPT = """
+def get_system_prompt() -> str:
+    today = date.today()
+    current_year = today.year
+    return f"""
 Ты — AI-ассистент базы данных PostgreSQL РЭУ им. Г. В. Плеханова.
 Генерируй точный SQL-запрос (PostgreSQL dialect) и формируй структурированный блок Explainable AI.
 
-ТОЧНАЯ СХЕМА БАЗЫ ДАННЫХ И СВЯЗИ (FOREIGN KEYS):
+ВРЕМЕННОЙ КОНТЕКСТ:
+- Текущий год: {current_year}.
+- Кампания {current_year} года: applications.campaign_year = {current_year}.
+
+ПРАВИЛА ПОИСКА ПО ТЕКСТУ (КРИТИЧЕСКИ ВАЖНО):
+- Никогда не используй строгое равенство (=) для названий факультетов, кафедр, дисциплин и программ!
+- ВСЕГДА используй нечеткий регистронезависимый поиск ILIKE '%...%':
+  * Для "Прикладная информатика": programs.name ILIKE '%Прикладная информатика%'
+  * Для "Высшая школа кибертехнологий" / "IT": faculties.name ILIKE '%кибертехнолог%' OR faculties.short_name ILIKE '%КМиС%'
+  * Для "Экономика": programs.name ILIKE '%Экономик%'
+  * Для "Менеджмент": programs.name ILIKE '%Менеджмент%'
+  * Для кафедр: departments.name ILIKE '%...%'
+
+ТОЧНАЯ СХЕМА БАЗЫ ДАННЫХ:
 1. faculties (id, name, short_name, dean_full_name, building, email)
-2. departments (id, faculty_id, name, head_full_name)
-   -> departments.faculty_id = faculties.id
-3. teachers (id, department_id, full_name, academic_degree, academic_title, position, email)
-   -> teachers.department_id = departments.id
-4. programs (id, faculty_id, program_code, name, education_level, budget_places, commercial_places, special_quota, target_quota, separate_quota, annual_tuition_fee)
-   -> programs.faculty_id = faculties.id
+   (Примеры: 'Высшая школа кибертехнологий, математики и статистики', 'Высшая школа экономики и бизнеса', 'Высшая школа финансов')
+2. departments (id, faculty_id, name, head_full_name) -> departments.faculty_id = faculties.id
+3. teachers (id, department_id, full_name, academic_degree, academic_title, position, email) -> teachers.department_id = departments.id
+4. programs (id, faculty_id, program_code, name, education_level, budget_places, commercial_places, special_quota, target_quota, separate_quota, annual_tuition_fee) -> programs.faculty_id = faculties.id
+   (Примеры: 'Прикладная информатика в экономике', 'Информатика и вычислительная техника', 'Экономика предприятий и организаций')
 5. applicants (id, snils, full_name, birth_date, passport_number, education_doc_type, doc_issue_year, school_name)
 6. applications (id, application_number, applicant_id, program_id, campaign_year, priority, study_form, admission_basis, quota_type, score_russian, score_math, elective_subject, score_elective, score_dvi, score_achievements, achievement_type, total_score, is_original_submitted, is_consent_submitted, status, enrollment_order_number, enrollment_order_date, submission_date)
    -> applications.applicant_id = applicants.id
    -> applications.program_id = programs.id
-7. students (id, program_id, student_card_number, study_group, study_year, admission_year, education_basis, student_status)
-   -> students.program_id = programs.id
+7. students (id, program_id, student_card_number, study_group, study_year, admission_year, education_basis, student_status) -> students.program_id = programs.id
 8. classrooms (id, building, room_number, capacity, room_type)
-9. disciplines (id, department_id, teacher_id, name, semester, academic_hours, control_form)
-   -> disciplines.department_id = departments.id
-   -> disciplines.teacher_id = teachers.id
-10. grades (id, student_id, discipline_id, semester, points, grade, has_academic_debt, exam_date)
-   -> grades.student_id = students.id
-   -> grades.discipline_id = disciplines.id
-11. schedules (id, classroom_id, discipline_id, day_of_week, time_slot, study_group, attendees_count)
-   -> schedules.classroom_id = classrooms.id
-   -> schedules.discipline_id = disciplines.id
+9. disciplines (id, department_id, teacher_id, name, semester, academic_hours, control_form) -> disciplines.department_id = departments.id, disciplines.teacher_id = teachers.id
+10. grades (id, student_id, discipline_id, semester, points, grade, has_academic_debt, exam_date) -> grades.student_id = students.id, grades.discipline_id = disciplines.id
+11. schedules (id, classroom_id, discipline_id, day_of_week, time_slot, study_group, attendees_count) -> schedules.classroom_id = classrooms.id, schedules.discipline_id = disciplines.id
 
 ОБРАБОТКА НЕКОРРЕКТНОГО / СЛУЧАЙНОГО ВВОДА:
 Если запрос пользователя:
@@ -52,7 +57,7 @@ SYSTEM_PROMPT = """
 - не имеет отношения к университету и его данным,
 ТОГДА:
 - Установи "sql": ""
-- Оставь "explanation": {}
+- Оставь "explanation": {{}}
 - В поле "summary_ru" вежливо напиши: "Не удалось распознать вопрос. Пожалуйста, уточните запрос (например: направления подготовки, список кафедр, преподаватели или статистика заявлений РЭУ)."
 
 ПРАВИЛА БЕЗОПАСНОСТИ:
@@ -61,17 +66,17 @@ SYSTEM_PROMPT = """
 3. По студентам и абитуриентам выводи агрегаты (COUNT, AVG) или обезличенные номера (application_number, student_card_number).
 
 ФОРМАТ ОТВЕТА (СТРОГО JSON):
-{
+{{
   "sql": "SELECT ...",
-  "explanation": {
+  "explanation": {{
     "tables": ["таблицы"],
     "joins": ["связи JOIN"],
     "filters": ["условия WHERE"],
     "aggregations": ["агрегатные функции"],
     "limit": "лимит"
-  },
+  }},
   "summary_ru": "Понятное объяснение на русском языке."
-}
+}}
 """
 
 def sanitize_user_input(text: str) -> str:
@@ -92,7 +97,6 @@ def parse_llm_json(raw_text: str) -> Dict[str, Any]:
 
     cleaned_text = re.sub(r"^```json\s*|\s*```$", "", raw_text.strip(), flags=re.MULTILINE)
     
-    # 1. Поиск JSON внутри фигурных скобок
     json_match = re.search(r"\{.*\}", cleaned_text, re.DOTALL)
     if json_match:
         try:
@@ -100,11 +104,9 @@ def parse_llm_json(raw_text: str) -> Dict[str, Any]:
         except Exception:
             pass
 
-    # 2. Попытка прямого парсинга
     try:
         return json.loads(cleaned_text)
     except Exception:
-        # Если модель вернула plain-text отказ или цензурный ответ
         return default_fallback
 
 async def generate_sql_and_explanation(user_question: str) -> Dict[str, Any]:
@@ -119,7 +121,7 @@ async def generate_sql_and_explanation(user_question: str) -> Dict[str, Any]:
         "modelUri": f"gpt://{YANDEX_FOLDER_ID}/yandexgpt/latest",
         "completionOptions": {"stream": False, "temperature": 0.0, "maxTokens": "2000"},
         "messages": [
-            {"role": "system", "text": SYSTEM_PROMPT},
+            {"role": "system", "text": get_system_prompt()},
             {"role": "user", "text": safe_question}
         ]
     }
@@ -137,7 +139,7 @@ async def generate_sql_and_explanation(user_question: str) -> Dict[str, Any]:
             raw_text = alternatives[0].get("message", {}).get("text", "")
             return parse_llm_json(raw_text)
             
-    except Exception as e:
+    except Exception:
         return {
             "sql": "",
             "explanation": {},
@@ -158,14 +160,14 @@ async def fix_sql_with_error(user_question: str, faulty_sql: str, error_msg: str
     СУБД PostgreSQL вернула ошибку:
     {error_msg}
     
-    Исправь SQL-запрос строго в соответствии со схемой таблиц и верни корректный JSON. Если запрос невозможно составить, верни "sql": "".
+    Исправь SQL-запрос строго в соответствии со схемой таблиц и правилом поиска через ILIKE '%...%'. Верни корректный JSON.
     """
     
     payload = {
         "modelUri": f"gpt://{YANDEX_FOLDER_ID}/yandexgpt/latest",
         "completionOptions": {"stream": False, "temperature": 0.0, "maxTokens": "2000"},
         "messages": [
-            {"role": "system", "text": SYSTEM_PROMPT},
+            {"role": "system", "text": get_system_prompt()},
             {"role": "user", "text": correction_prompt}
         ]
     }

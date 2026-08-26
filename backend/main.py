@@ -1,13 +1,8 @@
-# ==============================================================================
-# ФАЙЛ: backend/main.py (ЗАМЕНИТЬ ПОЛНОСТЬЮ)
-# ==============================================================================
-
 import time
 import os
 import sys
 import logging
 from contextlib import asynccontextmanager
-from typing import Tuple, Optional, List
 import asyncpg
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -62,7 +57,7 @@ app.add_middleware(
 class QueryRequest(BaseModel):
     question: str
 
-async def analyze_query_volume(base_sql: str) -> Tuple[int, Optional[str], List[str]]:
+async def analyze_query_volume(base_sql: str) -> tuple[int, str | None, list[str]]:
     if not base_sql or base_sql == "—":
         return 0, None, []
         
@@ -70,23 +65,37 @@ async def analyze_query_volume(base_sql: str) -> Tuple[int, Optional[str], List[
     count_sql = f"SELECT COUNT(*) AS total FROM ({clean_sql}) AS subquery_count"
     
     warning = None
-    suggested_filters: List[str] = []
+    suggested_filters = []
     
     try:
         pool = get_db_pool()
         async with pool.acquire() as conn:
             total_records = await conn.fetchval(count_sql)
             
-            if total_records and total_records > 20:
+            if total_records and total_records > 10:
                 warning = f"Широкая выборка: найдено {total_records} записей. Применена пагинация."
                 if "applications" in clean_sql:
-                    suggested_filters = ["Указать год (campaign_year = 2026)", "Выбрать статус (status = 'Зачислен')", "Фильтр по форме (study_form = 'Очная')"]
+                    suggested_filters = [
+                        "Покажи заявления за 2026 год",
+                        "Покажи только зачисленных абитуриентов",
+                        "Покажи очную форму обучения"
+                    ]
                 elif "students" in clean_sql:
-                    suggested_filters = ["Фильтр по курсу (study_year = 1)", "Фильтр по группе (study_group = 'ПИ-231')", "Только обучающиеся (student_status = 'Обучается')"]
+                    suggested_filters = [
+                        "Покажи студентов 2 курса",
+                        "Покажи студентов группы ПИ",
+                        "Покажи обучающихся студентов"
+                    ]
                 elif "grades" in clean_sql:
-                    suggested_filters = ["Указать семестр (semester = 2)", "Только задолженности (has_academic_debt = true)"]
+                    suggested_filters = [
+                        "Покажи оценки за 2 семестр",
+                        "Покажи только с задолженностями"
+                    ]
                 else:
-                    suggested_filters = ["Уточните факультет или кафедру", "Добавьте временной интервал"]
+                    suggested_filters = [
+                        "Покажи кафедры IT",
+                        "Покажи аудитории 1 корпуса"
+                    ]
                     
             return total_records or 0, warning, suggested_filters
     except Exception:
@@ -111,7 +120,7 @@ async def ask_question(req: QueryRequest):
             return {
                 "status": "info",
                 "type": "unrecognized_query",
-                "message": summary_ru or "Запрос не распознан. Пожалуйста, сформулируйте вопрос о структуре или аналитике университета."
+                "message": summary_ru or "Запрос не распознан. Пожалуйста, сформулируйте вопрос о данных университета."
             }
         
         safe_sql = validate_and_sanitize_sql(raw_sql, default_limit=100)
@@ -127,7 +136,7 @@ async def ask_question(req: QueryRequest):
                 return {
                     "status": "info",
                     "type": "unrecognized_query",
-                    "message": "Не удалось сформировать корректный запрос к базе данных. Уточните формулировку вопроса."
+                    "message": "Не удалось составить запрос к базе данных. Уточните формулировку вопроса."
                 }
                 
             explanation = fixed_response.get("explanation", {})
@@ -167,7 +176,7 @@ async def ask_question(req: QueryRequest):
         return {
             "status": "info",
             "type": "unrecognized_query",
-            "message": "По данному запросу не удалось сопоставить таблицы или параметры. Уточните вопрос (например: кафедры, преподаватели, заявления 2026)."
+            "message": "По данному запросу не удалось сопоставить сущности. Уточните вопрос (например: кафедры, аудитории, заявления 2026)."
         }
     except asyncpg.PostgresError as pe:
         execution_time = (time.perf_counter() - start_time) * 1000

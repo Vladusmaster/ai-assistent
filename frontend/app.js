@@ -5,7 +5,7 @@ const loader = document.getElementById('loader');
 const sendBtn = document.getElementById('sendBtn');
 
 window.tableStorage = window.tableStorage || new Map();
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 function toggleChat(forceState) {
     const isVisible = chatOverlay.style.display === 'flex';
@@ -39,9 +39,12 @@ function quickSend(promptText) {
     sendMessage();
 }
 
-function applyFilter(filterText) {
-    userInput.value = userInput.value ? `${userInput.value} (${filterText})` : filterText;
-    userInput.focus();
+function applyFilterBtn(btn) {
+    const query = btn.getAttribute('data-query');
+    if (query) {
+        userInput.value = query;
+        sendMessage();
+    }
 }
 
 function handleKeyPress(event) {
@@ -193,7 +196,7 @@ function renderBotResponse(data) {
     if (data.status === 'info' || data.type === 'unrecognized_query') {
         appendBotHtml(`
             <div class="warning-banner" style="background: #eff6ff; border-color: #bfdbfe; border-left-color: #3b82f6;">
-                <div class="warning-header" style="color: #1e40af;">ℹ️ Внимание:</div>
+                <div class="warning-header" style="color: #1e40af;">ℹ️ Обратите внимание:</div>
                 <div style="font-size: 13.5px; color: #1e3a8a;">${escapeHtml(data.message || data.summary)}</div>
             </div>
         `);
@@ -242,7 +245,9 @@ function renderBotResponse(data) {
         let chipsHtml = '';
         if (data.suggested_filters && data.suggested_filters.length > 0) {
             chipsHtml = `<div class="filter-chips">` +
-                data.suggested_filters.map(f => `<span class="chip-filter" onclick="applyFilter('${escapeHtml(f)}')">+ ${escapeHtml(f)}</span>`).join('') +
+                data.suggested_filters.map(f => {
+                    return `<span class="chip-filter" data-query="${escapeHtml(f)}" onclick="applyFilterBtn(this)">+ ${escapeHtml(f)}</span>`;
+                }).join('') +
                 `</div>`;
         }
         html += `
@@ -265,10 +270,10 @@ function renderBotResponse(data) {
         `;
     }
 
-    if (data.columns && data.columns.length > 0 && data.data) {
+    if (data.data) {
         if (data.data.length === 0) {
             html += '<p style="color: #64748b; font-style: italic; margin-top: 10px;">Записей по заданному критерию не обнаружено.</p>';
-        } else {
+        } else if (data.columns && data.columns.length > 0) {
             const tableId = 'tbl_' + Math.random().toString(36).substring(2, 9);
             const totalPages = Math.max(1, Math.ceil(data.data.length / PAGE_SIZE));
 
