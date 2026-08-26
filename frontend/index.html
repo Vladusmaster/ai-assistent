@@ -51,6 +51,20 @@
             </div>
 
             <div class="header-actions">
+                <div id="authHeaderBlock">
+                    <button class="btn-login-trigger" id="loginBtnTrigger" onclick="openLoginModal()">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+                        <span>Войти</span>
+                    </button>
+                    <div class="user-profile-badge" id="userProfileBadge" style="display: none;">
+                        <div class="user-avatar-circle" id="userAvatarLetter">A</div>
+                        <div class="user-info-text">
+                            <span class="user-name" id="headerUserName">Пользователь</span>
+                            <span class="user-role-tag" id="headerUserRole">Абитуриент</span>
+                        </div>
+                        <button class="btn-logout" onclick="logoutUser()" title="Выйти">✕</button>
+                    </div>
+                </div>
                 <button class="btn-ai-trigger" onclick="toggleChat(true)">
                     <span class="sparkle-icon">✨</span>
                     <span>AI-ассистент СУБД</span>
@@ -85,7 +99,7 @@
                 </div>
 
                 <div class="hero-card ai-showcase-card" onclick="toggleChat(true)">
-                    <div class="ai-chip">AI 2026</div>
+                    <div class="ai-chip">Система 2026</div>
                     <h3>Интеллектуальный ассистент СУБД</h3>
                     <p>Аналитика реестров вуза, конкурсных списков и успеваемости в режиме реального времени.</p>
                     <button class="btn-card-launch">Открыть диалоговое окно →</button>
@@ -101,6 +115,37 @@
         </svg>
     </button>
 
+    <!-- Модальное окно авторизации -->
+    <div class="login-modal-overlay" id="loginOverlay" onclick="handleLoginOverlayClick(event)">
+        <div class="login-window">
+            <div class="login-header">
+                <h3>Авторизация в СУБД РЭУ</h3>
+                <button class="ctrl-btn" onclick="closeLoginModal()">✕</button>
+            </div>
+            <form class="login-form" onsubmit="submitLoginForm(event)">
+                <div class="form-group">
+                    <label>Имя пользователя (Логин)</label>
+                    <input type="text" id="loginUsername" placeholder="admin, teacher, student или applicant" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label>Пароль</label>
+                    <input type="password" id="loginPassword" placeholder="Введите пароль" required autocomplete="current-password">
+                </div>
+                <div class="login-error-msg" id="loginError"></div>
+                <button type="submit" class="btn-submit-login" id="loginSubmitBtn">Войти в систему</button>
+                
+                <div class="demo-accounts-box">
+                    <div class="demo-title">Тестовые учетные записи (2026):</div>
+                    <div class="demo-account-item" onclick="fillDemo('admin', 'admin2026')">👑 <b>admin</b> / <code>admin2026</code> — Деканат (Полный доступ)</div>
+                    <div class="demo-account-item" onclick="fillDemo('teacher', 'teacher2026')">👨‍🏫 <b>teacher</b> / <code>teacher2026</code> — Преподаватель (Ведомости)</div>
+                    <div class="demo-account-item" onclick="fillDemo('student', 'student2026')">📚 <b>student</b> / <code>student2026</code> — Студент (Оценки)</div>
+                    <div class="demo-account-item" onclick="fillDemo('applicant', 'applicant2026')">🎓 <b>applicant</b> / <code>applicant2026</code> — Абитуриент</div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Модальное окно AI-чата -->
     <div class="chat-modal-overlay" id="chatOverlay" onclick="handleOverlayClick(event)">
         <div class="chat-window">
             
@@ -124,7 +169,7 @@
 
                 <div class="chat-controls">
                     <div class="role-selector-wrap">
-                        <label for="userRoleSelect" class="role-label">Роль:</label>
+                        <label for="userRoleSelect" class="role-label">Уровень доступа:</label>
                         <select id="userRoleSelect" class="role-select" onchange="onRoleChange()">
                             <option value="applicant" selected>🎓 Абитуриент</option>
                             <option value="student">📚 Студент</option>
@@ -136,7 +181,7 @@
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     </button>
                     <button class="ctrl-btn" onclick="toggleChat(false)" title="Закрыть">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
                 </div>
             </div>
@@ -152,7 +197,7 @@
             <div class="chat-messages" id="chatHistory">
                 <div class="message bot-msg">
                     <div class="msg-content">
-                        Здравствуйте! Я AI ассистент РЭУ им. Г.В. Плеханова. Задавайте вопросы, буду рад вам ответить!
+                        Здравствуйте! Я интеллектуальный ассистент аналитики данных РЭУ им. Г.В. Плеханова. Задайте вопрос по структуре вуза, деканатам, образовательным программам, заявлениям или учебным показателям.
                     </div>
                 </div>
             </div>

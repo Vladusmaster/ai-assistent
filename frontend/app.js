@@ -4,11 +4,143 @@ const userInput = document.getElementById('userInput');
 const loader = document.getElementById('loader');
 const sendBtn = document.getElementById('sendBtn');
 const userRoleSelect = document.getElementById('userRoleSelect');
+const loginOverlay = document.getElementById('loginOverlay');
+const loginBtnTrigger = document.getElementById('loginBtnTrigger');
+const userProfileBadge = document.getElementById('userProfileBadge');
+const headerUserName = document.getElementById('headerUserName');
+const headerUserRole = document.getElementById('headerUserRole');
+const userAvatarLetter = document.getElementById('userAvatarLetter');
+const loginError = document.getElementById('loginError');
 
 window.tableStorage = window.tableStorage || new Map();
 const PAGE_SIZE = 10;
 
+const ROLE_NAMES = {
+    'admin': 'Деканат / Администрация',
+    'teacher': 'Преподаватель',
+    'student': 'Студент',
+    'applicant': 'Абитуриент'
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    restoreUserSession();
+});
+
+function restoreUserSession() {
+    const raw = localStorage.getItem('reu_user');
+    if (raw) {
+        try {
+            const user = JSON.parse(raw);
+            applyUserToUI(user);
+        } catch (e) {
+            localStorage.removeItem('reu_user');
+        }
+    }
+}
+
+function applyUserToUI(user) {
+    if (userRoleSelect) {
+        userRoleSelect.value = user.role;
+        userRoleSelect.disabled = true;
+        userRoleSelect.title = "Роль зафиксирована текущей учетной записью";
+    }
+    if (loginBtnTrigger) loginBtnTrigger.style.display = 'none';
+    if (userProfileBadge) {
+        userProfileBadge.style.display = 'flex';
+        headerUserName.innerText = user.full_name.split(' ')[0] || user.username;
+        headerUserRole.innerText = ROLE_NAMES[user.role] || user.role;
+        userAvatarLetter.innerText = (user.full_name || user.username).charAt(0).toUpperCase();
+    }
+}
+
+function openLoginModal() {
+    loginError.innerText = '';
+    loginOverlay.style.display = 'flex';
+    document.getElementById('loginUsername').focus();
+}
+
+function closeLoginModal() {
+    loginOverlay.style.display = 'none';
+}
+
+function handleLoginOverlayClick(event) {
+    if (event.target === loginOverlay) {
+        closeLoginModal();
+    }
+}
+
+function fillDemo(u, p) {
+    document.getElementById('loginUsername').value = u;
+    document.getElementById('loginPassword').value = p;
+}
+
+async function submitLoginForm(e) {
+    e.preventDefault();
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value.trim();
+    const btn = document.getElementById('loginSubmitBtn');
+
+    if (!username || !password) return;
+
+    btn.disabled = true;
+    loginError.innerText = '';
+
+    try {
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.detail || 'Неверный логин или пароль');
+        }
+
+        localStorage.setItem('reu_user', JSON.stringify(data.user));
+        applyUserToUI(data.user);
+        closeLoginModal();
+
+        appendBotHtml(`
+            <div class="warning-banner" style="background: #f0fdf4; border-color: #bbf7d0; border-left-color: #17d97b;">
+                <div class="warning-header" style="color: #166534;">✅ Успешная авторизация:</div>
+                <div style="font-size: 13px; color: #14532d;">Здравствуйте, <b>${escapeHtml(data.user.full_name)}</b>! Вам присвоен уровень доступа: <b>${ROLE_NAMES[data.user.role]}</b> (переключатель зафиксирован).</div>
+            </div>
+        `);
+
+    } catch (err) {
+        loginError.innerText = err.message;
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function logoutUser() {
+    localStorage.removeItem('reu_user');
+    if (userProfileBadge) userProfileBadge.style.display = 'none';
+    if (loginBtnTrigger) loginBtnTrigger.style.display = 'inline-flex';
+    if (userRoleSelect) {
+        userRoleSelect.value = 'applicant';
+        userRoleSelect.disabled = false;
+        userRoleSelect.title = "Выберите роль вручную (гостевой режим)";
+    }
+    
+    appendBotHtml(`
+        <div class="warning-banner" style="background: #eff6ff; border-color: #bfdbfe; border-left-color: #3b82f6;">
+            <div class="warning-header" style="color: #1e40af;">ℹ️ Вы вышли из профиля:</div>
+            <div style="font-size: 13px; color: #1e3a8a;">Уровень доступа сброшен до базового. Ручной выбор роли разблокирован.</div>
+        </div>
+    `);
+}
+
 function getSelectedRole() {
+    const savedUser = localStorage.getItem('reu_user');
+    if (savedUser) {
+        try {
+            return JSON.parse(savedUser).role;
+        } catch (e) {}
+    }
     return userRoleSelect ? userRoleSelect.value : 'applicant';
 }
 
@@ -318,4 +450,4 @@ function renderBotResponse(data) {
     }
 
     appendBotHtml(html);
-}   
+}

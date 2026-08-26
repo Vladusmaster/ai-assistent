@@ -21,7 +21,7 @@ def get_system_prompt(role: str = "applicant") -> str:
         "applicant": """
 РОЛЬ ПОЛЬЗОВАТЕЛЯ: АБИТУРИЕНТ
 - Разрешено: программы, проходные баллы, кафедры, деканы, преподаватели, аудитории, АГРЕГИРОВАННАЯ статистика успеваемости.
-- СТРОГО ЗАПРЕЩЕНО выводить индивидуальные записи оценок из grades (SELECT * FROM grades, student_id, points построчно) и ФИО студентов.
+- СТРОГО ЗАПРЕЩЕНО выводить индивидуальные записи оценок из grades и ФИО студентов/абитуриентов.
 - По успеваемости разрешены ТОЛЬКО агрегаты (AVG(points), COUNT(*)).
         """,
         "student": """
@@ -48,44 +48,29 @@ def get_system_prompt(role: str = "applicant") -> str:
 
 ВРЕМЕННОЙ КОНТЕКСТ:
 - Текущий год: {current_year}.
-- Если указаны «последние N дней кампании X года», вычисляй интервал от максимальной даты подачи документов за этот год:
-  submission_date >= (SELECT MAX(submission_date) - INTERVAL '7 days' FROM applications WHERE campaign_year = 2025) AND campaign_year = 2025
+- Если конкретный год не назван в вопросе, не добавляй условий на admission_year или campaign_year.
 
-ПРАВИЛА ТИПИЗАЦИИ И СТОЛБЦОВ (КРИТИЧЕСКИ ВАЖНО):
-1. disciplines.semester — это INTEGER (число от 1 до 8).
-   - «Весенний семестр» -> semester IN (2, 4, 6, 8) или (semester % 2 = 0).
-   - «Осенний семестр» -> semester IN (1, 3, 5, 7) или (semester % 2 = 1).
-   - ЗАПРЕЩЕНО писать `semester ILIKE ...`!
-2. grades.points — это INTEGER (баллы от 0 до 100). Для среднего балла ВСЕГДА используй `AVG(grades.points)`.
-3. grades.grade — это VARCHAR ('5 (Отл)', '4 (Хор)', '3 (Удовл)', '2 (Неуд)'). ЗАПРЕЩЕНО делать `AVG(grade)`!
-4. «Успешно сдал экзамен» -> (grades.has_academic_debt = false) или (grades.points >= 50).
-5. «Не сдал ни одного экзамена / только задолженности» ->
-   SELECT students.id, students.full_name, students.study_group
+ПРАВИЛА ПОИСКА ПО ТЕКСТОВЫМ ПОЛЯМ (СТРОГО):
+Никогда не используй строгое равенство (=) для строковых полей! ВСЕГДА используй нечеткий регистронезависимый поиск ILIKE '%...%':
+1. Основа обучения (бюджет / платное):
+   - Бюджет: students.education_basis ILIKE '%бюджет%' ИЛИ applications.admission_basis ILIKE '%бюджет%'
+   - Платное/договор: students.education_basis ILIKE '%договор%' ИЛИ applications.admission_basis ILIKE '%платн%'
+2. Высшие школы и факультеты (ВШКМиС, ВШЭиБ, ВШФ, IT):
+   - ВШКМиС / IT / Кибертехнологии: faculties.short_name ILIKE '%КМиС%' OR faculties.name ILIKE '%кибертехнолог%'
+   - ВШЭиБ: faculties.short_name ILIKE '%ВШЭиБ%' OR faculties.name ILIKE '%экономики%'
+   - ВШФ: faculties.short_name ILIKE '%ВШФ%' OR faculties.name ILIKE '%финанс%'
+3. Связка студентов со школами и факультетами:
+   SELECT DISTINCT students.full_name, students.study_group, students.education_basis
    FROM students
-   JOIN grades ON students.id = grades.student_id
-   GROUP BY students.id, students.full_name, students.study_group
-   HAVING bool_and(grades.has_academic_debt = true);
-6. «Средняя учебная нагрузка на преподавателя по кафедре» ->
-   SELECT departments.name, SUM(disciplines.academic_hours)::float / NULLIF(COUNT(DISTINCT teachers.id), 0) AS avg_hours
-   FROM departments
-   JOIN teachers ON departments.id = teachers.department_id
-   JOIN disciplines ON teachers.id = disciplines.teacher_id
-   GROUP BY departments.name
-   HAVING (SUM(disciplines.academic_hours)::float / NULLIF(COUNT(DISTINCT teachers.id), 0)) > 250;
-7. Сравнение «средний балл кафедры ниже среднего по университету»:
-   WITH uni_avg AS (SELECT AVG(points) AS val FROM grades)
-   SELECT departments.name, AVG(grades.points) AS dept_avg
-   FROM departments
-   JOIN teachers ON departments.id = teachers.department_id
-   JOIN disciplines ON teachers.id = disciplines.teacher_id
-   JOIN grades ON disciplines.id = grades.discipline_id
-   CROSS JOIN uni_avg
-   GROUP BY departments.name, uni_avg.val
-   HAVING AVG(grades.points) < uni_avg.val;
+   JOIN programs ON students.program_id = programs.id
+   JOIN faculties ON programs.faculty_id = faculties.id
+   WHERE (faculties.short_name ILIKE '%КМиС%' OR faculties.name ILIKE '%кибертехнолог%')
+   AND students.education_basis ILIKE '%бюджет%';
 
-СВЯЗИ СУЩНОСТЕЙ:
-- Факультеты и институты (ВШКМиС, ВШЭиБ, ВШФ, IT) -> faculties (name, short_name).
-- Поиск по тексту ВСЕГДА через `ILIKE '%...%'`.
+ПРАВИЛА ТИПОВ ДАННЫХ:
+- disciplines.semester — это число (INTEGER).
+- grades.points — это число (INTEGER). Для среднего балла используй AVG(grades.points).
+- grades.grade — это строка ('5 (Отл)', '4 (Хор)', '3 (Удовл)', '2 (Неуд)').
 
 {selected_role_rule}
 
@@ -128,12 +113,12 @@ def parse_llm_json(raw_text: str) -> Dict[str, Any]:
         "explanation": {},
         "summary_ru": "Не удалось распознать вопрос. Пожалуйста, сформулируйте запрос о структуре или аналитике университета."
     }
-    
+
     if not raw_text or not raw_text.strip():
         return default_fallback
 
     cleaned_text = re.sub(r"^```json\s*|\s*```$", "", raw_text.strip(), flags=re.MULTILINE)
-    
+
     json_match = re.search(r"\{.*\}", cleaned_text, re.DOTALL)
     if json_match:
         try:
@@ -148,12 +133,12 @@ def parse_llm_json(raw_text: str) -> Dict[str, Any]:
 
 async def generate_sql_and_explanation(user_question: str, role: str = "applicant") -> Dict[str, Any]:
     safe_question = sanitize_user_input(user_question)
-    
+
     headers = {
         "Authorization": f"Api-Key {YANDEX_API_KEY}",
         "Content-Type": "application/json"
     }
-    
+
     payload = {
         "modelUri": f"gpt://{YANDEX_FOLDER_ID}/yandexgpt/latest",
         "completionOptions": {"stream": False, "temperature": 0.0, "maxTokens": "2000"},
@@ -162,20 +147,20 @@ async def generate_sql_and_explanation(user_question: str, role: str = "applican
             {"role": "user", "text": safe_question}
         ]
     }
-    
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(YANDEX_API_URL, headers=headers, json=payload)
             response.raise_for_status()
             result_json = response.json()
-            
+
             alternatives = result_json.get("result", {}).get("alternatives", [])
             if not alternatives:
                 return parse_llm_json("")
-                
+
             raw_text = alternatives[0].get("message", {}).get("text", "")
             return parse_llm_json(raw_text)
-            
+
     except Exception:
         return {
             "sql": "",
@@ -188,18 +173,18 @@ async def fix_sql_with_error(user_question: str, faulty_sql: str, error_msg: str
         "Authorization": f"Api-Key {YANDEX_API_KEY}",
         "Content-Type": "application/json"
     }
-    
+
     correction_prompt = f"""
     Вопрос пользователя: "{user_question}"
     Твой предыдущий SQL-запрос:
     {faulty_sql}
-    
+
     СУБД PostgreSQL вернула ошибку:
     {error_msg}
-    
-    Исправь SQL-запрос строго в соответствии со схемой таблиц, правильными типами данных (semester - число, points - число) и связями. Верни корректный JSON.
+
+    Исправь SQL-запрос строго в соответствии со схемой таблиц, связями faculties и правилом поиска текстовых полей через ILIKE '%...%'. Верни корректный JSON.
     """
-    
+
     payload = {
         "modelUri": f"gpt://{YANDEX_FOLDER_ID}/yandexgpt/latest",
         "completionOptions": {"stream": False, "temperature": 0.0, "maxTokens": "2000"},
@@ -208,17 +193,17 @@ async def fix_sql_with_error(user_question: str, faulty_sql: str, error_msg: str
             {"role": "user", "text": correction_prompt}
         ]
     }
-    
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(YANDEX_API_URL, headers=headers, json=payload)
             response.raise_for_status()
             result_json = response.json()
-            
+
             alternatives = result_json.get("result", {}).get("alternatives", [])
             if not alternatives:
                 return parse_llm_json("")
-                
+
             raw_text = alternatives[0].get("message", {}).get("text", "")
             return parse_llm_json(raw_text)
     except Exception:
@@ -229,23 +214,23 @@ async def ask_yandex_gpt_analytics(logs_context: str) -> str:
         "Authorization": f"Api-Key {YANDEX_API_KEY}",
         "Content-Type": "application/json"
     }
-    
+
     prompt = f"""
     Проанализируй список последних пользовательских запросов к базе данных университета:
     {logs_context}
-    
+
     Сформируй краткую аналитическую сводку (3-4 предложения):
     1. Какие темы больше всего интересуют пользователей.
     2. Были ли зафиксированы попытки вредоносных запросов.
     3. Рекомендация руководству по оптимизации данных.
     """
-    
+
     payload = {
         "modelUri": f"gpt://{YANDEX_FOLDER_ID}/yandexgpt/latest",
         "completionOptions": {"stream": False, "temperature": 0.2, "maxTokens": "1000"},
         "messages": [{"role": "user", "text": prompt}]
     }
-    
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(YANDEX_API_URL, headers=headers, json=payload)

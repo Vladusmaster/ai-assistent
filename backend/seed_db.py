@@ -4,6 +4,7 @@ import random
 from datetime import date
 import asyncpg
 from dotenv import load_dotenv
+from database import hash_password
 
 load_dotenv()
 
@@ -26,6 +27,17 @@ DROP TABLE IF EXISTS programs CASCADE;
 DROP TABLE IF EXISTS teachers CASCADE;
 DROP TABLE IF EXISTS departments CASCADE;
 DROP TABLE IF EXISTS faculties CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(100) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(50) NOT NULL,
+    full_name VARCHAR(255) NOT NULL,
+    email VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 CREATE TABLE faculties (
     id SERIAL PRIMARY KEY,
@@ -202,6 +214,18 @@ async def seed():
     
     print("Создание схемы таблиц...")
     await conn.execute(DDL_SCHEMA)
+
+    print("Создание системных пользователей с хешированием паролей...")
+    users_data = [
+        ("admin", hash_password("admin2026"), "admin", "Титов Валерий Александрович (Декан ВШКМиС)", "titov.va@rea.ru"),
+        ("teacher", hash_password("teacher2026"), "teacher", "Сухоруков Андрей Сергеевич (Зав. кафедрой)", "sukhorukov.as@rea.ru"),
+        ("student", hash_password("student2026"), "student", "Смирнов Артем Дмитриевич (Студент)", "smirnov.ad@rea.ru"),
+        ("applicant", hash_password("applicant2026"), "applicant", "Абитуриент 2026 года", "applicant.info@rea.ru")
+    ]
+    await conn.executemany(
+        "INSERT INTO users (username, password_hash, role, full_name, email) VALUES ($1, $2, $3, $4, $5)",
+        users_data
+    )
 
     faculties_data = [
         ("Высшая школа кибертехнологий, математики и статистики", "ВШ КМиС", "Титов Валерий Александрович", "Корпус 9 (Зацепа, 41с4)", "cyber@rea.ru"),
@@ -389,7 +413,7 @@ async def seed():
         app_records
     )
 
-    print("Генерация 600 студентов с ФИО...")
+    print("Генерация 600 студентов...")
     group_prefixes = ["ПИ-", "ИВТ-", "ПМИ-", "ЭК-", "МЕН-", "ФИН-", "ЮР-", "СОЦ-", "РЕК-", "ТАМ-", "ФОР-", "МЕД-", "ИНТ-"]
     student_records = []
 
@@ -490,7 +514,7 @@ async def seed():
     )
 
     await conn.close()
-    print("Заполнение базы данных успешно завершено.")
+    print("Инициализация БД с поддержкой пользователей и хеширования завершена.")
 
 if __name__ == "__main__":
     asyncio.run(seed())

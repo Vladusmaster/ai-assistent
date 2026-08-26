@@ -1,4 +1,6 @@
 import os
+import hashlib
+import secrets
 import asyncpg
 from typing import Any, Dict, List, Tuple, Optional
 from dotenv import load_dotenv
@@ -12,6 +14,20 @@ DB_USER = os.getenv("DB_USER", "vdb5_user").strip()
 DB_PASSWORD = os.getenv("DB_PASSWORD", "X59b39C9-5D4X4NHn").strip()
 
 _pool: Optional[asyncpg.Pool] = None
+
+def hash_password(password: str, salt: Optional[str] = None) -> str:
+    if not salt:
+        salt = secrets.token_hex(16)
+    key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 100_000)
+    return f"{salt}${key.hex()}"
+
+def verify_password(stored_hash: str, password: str) -> bool:
+    try:
+        salt, original_key = stored_hash.split("$")
+        check_key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 100_000)
+        return check_key.hex() == original_key
+    except Exception:
+        return False
 
 async def init_db_pool():
     global _pool

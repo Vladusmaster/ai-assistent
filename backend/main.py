@@ -4,7 +4,7 @@ import sys
 import logging
 from contextlib import asynccontextmanager
 import asyncpg
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -23,7 +23,8 @@ from database import (
     get_db_pool,
     execute_safe_query,
     create_log_table,
-    log_user_query
+    log_user_query,
+    verify_password
 )
 from security import (
     check_prompt_security_intent,
@@ -54,9 +55,38 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
 class QueryRequest(BaseModel):
     question: str
     role: str = "applicant"
+
+@app.post("/api/auth/login")
+async def login(req: LoginRequest):
+    pool = get_db_pool()
+    async with pool.acquire() as conn:
+        user_row = await conn.fetchrow(
+            "SELECT username, password_hash, role, full_name, email FROM users WHERE username = $1",
+            req.username.strip()
+        )
+        
+    if not user_row or not verify_password(user_row["password_hash"], req.password.strip()):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Неверное имя пользователя или пароль."
+        )
+        
+    return {
+        "status": "success",
+        "user": {
+            "username": user_row["username"],
+            "role": user_row["role"],
+            "full_name": user_row["full_name"],
+            "email": user_row["email"]
+        }
+    }
 
 async def analyze_query_volume(base_sql: str) -> tuple[int, str | None, list[str]]:
     if not base_sql or base_sql == "—":
