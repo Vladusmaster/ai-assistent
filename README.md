@@ -16,11 +16,11 @@
 Создайте файл `.env` в корневом каталоге проекта:
 
 ```dotenv
-DB_HOST=185.241.193.203
-DB_PORT=5432
-DB_NAME=vesna-db5
-DB_USER=vdb5_user
-DB_PASSWORD=X59b39C9-5D4X4NHn
+DB_HOST=
+DB_PORT=
+DB_NAME=
+DB_USER=
+DB_PASSWORD=
 
 YANDEX_API_KEY=ваш_секретный_api_key
 YANDEX_FOLDER_ID=ваш_folder_id
