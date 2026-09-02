@@ -30,3 +30,4 @@ YANDEX_FOLDER_ID=ваш_folder_id
    ```bash
    git clone [https://github.com/Vladusmaster/ai-assistent.git](https://github.com/Vladusmaster/ai-assistent.git)
    cd ai-assistent
+   code .
